@@ -1,0 +1,31 @@
+# Virtual Environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/
+build/
+*.local
+
+# Environment variables & secrets (NEVER COMMIT)
+.env
+.env.*
+!.env.example
+
+# Database & Runtime data & caches
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.wal
+*.shm
+backend/data/*.db*
+backend/data/cache/
+
+# Logs & temp
+*.log
+.DS_Store
+.pytest_cache/
