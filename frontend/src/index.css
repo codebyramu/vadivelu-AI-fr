@@ -22,14 +22,14 @@
   }
 
   body {
-    background-color: #fbfbfa;
-    color: #18191e;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    background-color: #ffffff;
+    color: #000000;
+    transition: background-color 0.15s ease, color 0.15s ease;
   }
 
   html.dark body {
-    background-color: #080a0f;
-    color: #f4f4f6;
+    background-color: #000000;
+    color: #ffffff;
   }
 }
 
@@ -87,27 +87,4 @@
   animation: ripple-ring 4s ease-in-out infinite;
 }
 
-/* Starry space background for Immersive Voice Mode */
-.starry-bg {
-  background-color: #0b0e14;
-  background-image: 
-    radial-gradient(1px 1px at 20px 30px, #ffffff, rgba(0, 0, 0, 0)),
-    radial-gradient(1.5px 1.5px at 100px 80px, rgba(255, 255, 255, 0.8), rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 220px 140px, #93c5fd, rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 350px 70px, rgba(255, 255, 255, 0.7), rgba(0, 0, 0, 0)),
-    radial-gradient(1.5px 1.5px at 480px 210px, #60a5fa, rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 700px 90px, rgba(255, 255, 255, 0.6), rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 850px 280px, #bfdbfe, rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 950px 150px, rgba(255, 255, 255, 0.7), rgba(0, 0, 0, 0)),
-    radial-gradient(1.5px 1.5px at 1100px 320px, #93c5fd, rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 1200px 70px, rgba(255, 255, 255, 0.8), rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 1350px 240px, rgba(255, 255, 255, 0.5), rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 150px 420px, #bfdbfe, rgba(0, 0, 0, 0)),
-    radial-gradient(1.5px 1.5px at 380px 520px, rgba(255, 255, 255, 0.9), rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 620px 480px, #60a5fa, rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 820px 590px, rgba(255, 255, 255, 0.7), rgba(0, 0, 0, 0)),
-    radial-gradient(1.5px 1.5px at 1050px 470px, rgba(255, 255, 255, 0.8), rgba(0, 0, 0, 0)),
-    radial-gradient(1px 1px at 1280px 560px, #93c5fd, rgba(0, 0, 0, 0));
-  background-repeat: repeat;
-  background-size: 1400px 700px;
-}
+

@@ -333,7 +333,7 @@ export const App: React.FC = () => {
   }, [themeChoice, isDark, handleSelectTheme]);
 
   return (
-    <div className={`w-screen h-screen overflow-hidden ${isDark ? 'dark bg-[#080a0f] text-zinc-100' : 'bg-[#fbfbfa] text-zinc-900'} transition-colors duration-200`}>
+    <div className={`w-screen h-screen overflow-hidden ${isDark ? 'dark bg-black text-white' : 'bg-white text-black'} transition-colors duration-150`}>
       {/* Immersive Fullscreen Voice Mode View */}
       {isVoiceMode ? (
         <VoiceModeView

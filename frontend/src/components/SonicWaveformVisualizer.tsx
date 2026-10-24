@@ -62,15 +62,15 @@ export const SonicWaveformVisualizer: React.FC<SonicWaveformVisualizerProps> = (
 
       const pulseFactor = Math.max(0, Math.min(1.4, audioPower));
 
-      // Color tokens:
-      // Dark mode: creamy warm off-white waves with subtle warm glow
-      // Light mode: subtle dark charcoal / graphite waves with restrained shadow
-      const ringColorBase = isDarkTheme ? '248, 245, 238' : '45, 52, 64';
-      const shadowColor = isDarkTheme ? 'rgba(255, 250, 240, 0.35)' : 'rgba(30, 36, 48, 0.2)';
-      const coreStrokeColor = isDarkTheme ? 'rgba(252, 249, 242, 0.88)' : 'rgba(35, 42, 54, 0.82)';
-      const coreAuraColor = isDarkTheme ? 'rgba(255, 252, 245, 0.05)' : 'rgba(30, 36, 48, 0.03)';
-      const spikeColorBase = isDarkTheme ? '252, 250, 246' : '32, 38, 48';
-      const centerLineStroke = isDarkTheme ? 'rgba(255, 255, 255, 0.85)' : 'rgba(25, 30, 40, 0.75)';
+      // Pure Monochrome Tokens:
+      // Dark mode: Full pure white sound waves over black
+      // Light mode: Full pure black sound waves over white
+      const ringColorBase = isDarkTheme ? '255, 255, 255' : '0, 0, 0';
+      const shadowColor = isDarkTheme ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.2)';
+      const coreStrokeColor = isDarkTheme ? 'rgba(255, 255, 255, 0.95)' : 'rgba(0, 0, 0, 0.85)';
+      const coreAuraColor = isDarkTheme ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.04)';
+      const spikeColorBase = isDarkTheme ? '255, 255, 255' : '0, 0, 0';
+      const centerLineStroke = isDarkTheme ? 'rgba(255, 255, 255, 0.95)' : 'rgba(0, 0, 0, 0.85)';
 
       // 1. Draw concentric ripples (background rings)
       const ringCount = 12;

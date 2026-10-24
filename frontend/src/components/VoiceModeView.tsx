@@ -52,20 +52,20 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
   const displayMeme = activeMeme;
 
   return (
-    <div className="relative w-full h-screen max-h-screen bg-[#07090e] starry-bg text-white flex flex-col justify-between overflow-hidden select-none">
+    <div className="relative w-full h-screen max-h-screen bg-black text-white flex flex-col justify-between overflow-hidden select-none">
       {/* Top Bar (Clean minimal desktop style, no colored dots) */}
-      <div className="h-14 px-6 flex items-center justify-between z-20 shrink-0 border-b border-gray-800/40 backdrop-blur-sm">
+      <div className="h-14 px-6 flex items-center justify-between z-20 shrink-0 border-b border-neutral-800 backdrop-blur-sm bg-black">
         {/* Left: Back button & title */}
         <div className="flex items-center gap-3">
           <button
             onClick={onClose}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 active:scale-95 text-gray-300 hover:text-white border border-gray-700/50 text-xs font-medium transition shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900 hover:bg-neutral-800 active:scale-95 text-neutral-300 hover:text-white border border-neutral-700 text-xs font-medium transition shadow-sm"
             title="Return to Chat"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Chat</span>
           </button>
-          <span className="text-xs font-semibold text-gray-300 tracking-wide">
+          <span className="text-xs font-semibold text-white tracking-wide">
             AI Voice Chat
           </span>
         </div>
@@ -74,14 +74,14 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
         <div className="flex items-center gap-2.5">
           <button
             onClick={onInterrupt}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#18202e] hover:bg-[#202b3d] active:scale-95 text-gray-200 border border-gray-700/60 rounded-full text-xs font-medium transition shadow-sm"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-neutral-900 hover:bg-neutral-800 active:scale-95 text-white border border-neutral-700 rounded-full text-xs font-medium transition shadow-sm"
           >
             <Pause className="w-3.5 h-3.5 fill-current" />
             <span>Interrupt</span>
           </button>
           <button
             onClick={onToggleListening}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#2a1518]/90 hover:bg-[#381c20] active:scale-95 text-[#f87171] border border-red-500/30 rounded-full text-xs font-medium transition shadow-sm"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-neutral-200 active:scale-95 text-black rounded-full text-xs font-semibold transition shadow-sm"
           >
             <Square className="w-3.5 h-3.5 fill-current" />
             <span>{isListening ? 'Stop Listening' : 'Start Listening'}</span>
@@ -90,8 +90,8 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
       </div>
 
       {/* Center Visualizer & Interaction Area */}
-      <div className="flex-1 flex flex-col items-center justify-center relative px-4">
-        {/* Massive Glowing Sonic Waveform Canvas */}
+      <div className="flex-1 flex flex-col items-center justify-center relative px-4 bg-black">
+        {/* Glowing Sonic Waveform Canvas */}
         <div className="relative flex items-center justify-center -mt-6">
           <SonicWaveformVisualizer
             analyserNode={analyserNode}
@@ -102,26 +102,26 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
         </div>
 
         {/* Status Indicator */}
-        <div className="flex items-center justify-center gap-2 text-sm font-medium text-zinc-200 mt-1 tracking-wide animate-pulse-subtle">
+        <div className="flex items-center justify-center gap-2 text-sm font-medium text-white mt-1 tracking-wide">
           <span>{statusText}</span>
         </div>
 
         {/* Dynamic Reaction Meme Card */}
         <div className="h-12 flex items-center justify-center mt-3">
           {displayMeme ? (
-            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 bg-[#121927]/90 border border-[#233247] rounded-full shadow-2xl backdrop-blur animate-in fade-in zoom-in-95 duration-200">
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-1.5 bg-neutral-900 border border-neutral-700 rounded-full shadow-2xl backdrop-blur animate-in fade-in zoom-in-95 duration-150">
               {displayMeme.thumbnailUrl ? (
                 <img
                   src={displayMeme.thumbnailUrl}
                   alt={displayMeme.title || 'Meme'}
-                  className="w-6 h-6 rounded-md object-cover ring-1 ring-blue-500/50"
+                  className="w-6 h-6 rounded-md object-cover ring-1 ring-neutral-600"
                 />
               ) : (
-                <div className="w-6 h-6 rounded-md bg-blue-600 flex items-center justify-center text-[10px] font-bold">
+                <div className="w-6 h-6 rounded-md bg-neutral-800 flex items-center justify-center text-[10px] font-bold text-white">
                   🎭
                 </div>
               )}
-              <span className="text-xs font-medium text-gray-200">
+              <span className="text-xs font-medium text-white">
                 Playing {displayMeme.title || displayMeme.memeId} meme
               </span>
             </div>
@@ -132,33 +132,29 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
 
         {/* Live speech transcription preview */}
         {(transcript || interimTranscript) && (
-          <div className="max-w-md px-4 py-2 mt-2 bg-[#121824]/80 border border-gray-800 rounded-2xl text-xs text-blue-200 text-center animate-in fade-in">
+          <div className="max-w-md px-4 py-2 mt-2 bg-neutral-900 border border-neutral-800 rounded-2xl text-xs text-neutral-300 text-center animate-in fade-in">
             <span>"{transcript} {interimTranscript}"</span>
           </div>
         )}
 
-        {/* Glowing Microphone Button */}
+        {/* Microphone Button */}
         <div className="flex flex-col items-center mt-4">
           <button
             onClick={onToggleListening}
             className={`relative group w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 ${
               isListening
-                ? 'bg-gradient-to-b from-[#1a73e8] to-[#0d47a1] ring-4 ring-blue-500/30 shadow-[0_0_40px_rgba(26,115,232,0.6)] scale-105'
-                : 'bg-gradient-to-b from-gray-700 to-gray-850 ring-2 ring-gray-600 hover:ring-blue-500/50'
+                ? 'bg-white text-black ring-4 ring-white/20 shadow-[0_0_40px_rgba(255,255,255,0.3)] scale-105'
+                : 'bg-neutral-900 border border-neutral-700 text-neutral-400 hover:text-white'
             }`}
           >
-            {/* Concentric subtle pulsing ring */}
-            {isListening && (
-              <span className="absolute inset-0 rounded-full ring-2 ring-blue-400/40 animate-ping opacity-60 pointer-events-none" />
-            )}
             {isListening ? (
-              <Mic className="w-8 h-8 text-white" />
+              <Mic className="w-8 h-8 text-black" />
             ) : (
-              <MicOff className="w-8 h-8 text-gray-400 group-hover:text-white transition" />
+              <MicOff className="w-8 h-8 text-neutral-400 group-hover:text-white transition" />
             )}
           </button>
 
-          <span className="text-xs font-medium text-[#60a5fa] mt-3 tracking-wide">
+          <span className="text-xs font-medium text-neutral-300 mt-3 tracking-wide">
             {isListening ? 'Microphone on • Listening actively' : 'Microphone muted • Tap to talk'}
           </span>
         </div>
@@ -166,31 +162,31 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
 
       {/* Transcript Drawer Overlay */}
       {showTranscript && (
-        <div className="absolute inset-x-0 bottom-16 top-16 z-30 bg-[#0e131d]/95 backdrop-blur-xl border-t border-gray-800 p-6 flex flex-col animate-in slide-in-from-bottom duration-200">
-          <div className="flex items-center justify-between pb-4 border-b border-gray-800">
-            <h3 className="text-sm font-semibold text-gray-200">Live Voice Transcript</h3>
+        <div className="absolute inset-x-0 bottom-16 top-16 z-30 bg-black/95 backdrop-blur-xl border-t border-neutral-800 p-6 flex flex-col animate-in slide-in-from-bottom duration-150">
+          <div className="flex items-center justify-between pb-4 border-b border-neutral-800">
+            <h3 className="text-sm font-semibold text-white">Live Voice Transcript</h3>
             <button
               onClick={() => setShowTranscript(false)}
-              className="p-1 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white"
+              className="p-1 rounded-lg hover:bg-neutral-900 text-neutral-400 hover:text-white"
             >
               <ChevronDown className="w-5 h-5" />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto py-4 space-y-3">
             {messages.length === 0 ? (
-              <p className="text-xs text-gray-500 text-center py-10">No messages yet. Speak to begin!</p>
+              <p className="text-xs text-neutral-500 text-center py-10">No messages yet. Speak to begin!</p>
             ) : (
               messages.map(msg => (
                 <div
                   key={msg.id}
                   className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
                 >
-                  <span className="text-[10px] text-gray-500 mb-1 capitalize">{msg.role}</span>
+                  <span className="text-[10px] text-neutral-500 mb-1 capitalize">{msg.role}</span>
                   <div
                     className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-xs ${
                       msg.role === 'user'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-800 text-gray-200'
+                        ? 'bg-white text-black font-medium'
+                        : 'bg-neutral-900 border border-neutral-800 text-white'
                     }`}
                   >
                     {msg.content}
@@ -203,10 +199,10 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
       )}
 
       {/* Bottom Dock */}
-      <div className="h-16 border-t border-gray-800/80 bg-[#080b11]/90 backdrop-blur-md px-12 flex items-center justify-around text-gray-400 z-20 shrink-0">
+      <div className="h-16 border-t border-neutral-800 bg-black px-12 flex items-center justify-around text-neutral-400 z-20 shrink-0">
         <button
           onClick={onOpenSettings}
-          className="flex flex-col items-center gap-1 hover:text-gray-200 transition group"
+          className="flex flex-col items-center gap-1 hover:text-white transition group"
         >
           <SettingsIcon className="w-4 h-4 group-hover:rotate-45 transition duration-300" />
           <span className="text-[11px] font-medium">Settings</span>
@@ -215,7 +211,7 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
         <button
           onClick={() => setShowTranscript(!showTranscript)}
           className={`flex flex-col items-center gap-1 transition ${
-            showTranscript ? 'text-blue-400' : 'hover:text-gray-200'
+            showTranscript ? 'text-white' : 'hover:text-white'
           }`}
         >
           <Subtitles className="w-4 h-4" />
@@ -224,7 +220,7 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
 
         <button
           onClick={onClose}
-          className="flex flex-col items-center gap-1 hover:text-red-400 transition"
+          className="flex flex-col items-center gap-1 hover:text-white transition"
         >
           <PhoneOff className="w-4 h-4" />
           <span className="text-[11px] font-medium">End Chat</span>

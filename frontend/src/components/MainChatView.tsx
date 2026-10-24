@@ -134,7 +134,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
         return (
           <span
             key={index}
-            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 my-0.5 mx-1 rounded-full text-xs font-semibold bg-blue-100/80 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800 align-middle shadow-xs"
+            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 my-0.5 mx-1 rounded-full text-xs font-semibold bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white border border-neutral-300 dark:border-neutral-700 align-middle shadow-xs"
           >
             <span className="text-[11px]">🎭</span>
             <span>[meme: {memeTitle}]</span>
@@ -152,31 +152,31 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-screen max-h-screen bg-[#fbfbfa] dark:bg-[#080a0f] text-zinc-900 dark:text-zinc-100 select-none overflow-hidden font-sans transition-colors duration-200">
+    <div className="flex flex-col h-screen max-h-screen bg-white dark:bg-black text-black dark:text-white select-none overflow-hidden font-sans transition-colors duration-150">
       {/* Desktop App Window Title Bar (Clean, minimal, no colored dots) */}
-      <div className="h-10 bg-[#f0f2f5] dark:bg-[#0c0f16] border-b border-black/[0.06] dark:border-white/[0.06] px-4 flex items-center justify-between shrink-0">
+      <div className="h-10 bg-white dark:bg-black border-b border-neutral-200 dark:border-neutral-800 px-4 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5">
-          <div className="w-5 h-5 rounded-md bg-gradient-to-tr from-zinc-700 to-zinc-900 dark:from-zinc-100 dark:to-zinc-300 text-white dark:text-zinc-900 flex items-center justify-center shadow-xs">
+          <div className="w-5 h-5 rounded-md bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
             <Sparkles className="w-3 h-3" />
           </div>
-          <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 tracking-tight">
+          <span className="text-xs font-semibold text-black dark:text-white tracking-tight">
             AI Voice Chat
           </span>
         </div>
-        <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 truncate max-w-sm">
+        <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400 truncate max-w-sm">
           {activeConversation?.title || 'Vadivelu AI'}
         </div>
         <div className="flex items-center gap-1.5">
           {onToggleTheme && (
             <button
               onClick={onToggleTheme}
-              className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5 transition"
+              className="p-1 rounded-md text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition"
               title={`Theme: ${themeChoice} (Click to toggle)`}
             >
               {themeChoice === 'dark' ? (
                 <Moon className="w-3.5 h-3.5" />
               ) : themeChoice === 'light' ? (
-                <Sun className="w-3.5 h-3.5 text-amber-500" />
+                <Sun className="w-3.5 h-3.5" />
               ) : (
                 <Monitor className="w-3.5 h-3.5" />
               )}
@@ -184,14 +184,14 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
           )}
           <button
             onClick={onOpenSettings}
-            className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5 transition"
+            className="p-1 rounded-md text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition"
             title="Settings"
           >
             <Settings className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={onOpenCommandPalette}
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 border border-black/10 dark:border-white/10"
+            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white border border-neutral-200 dark:border-neutral-800"
             title="Command Palette (Ctrl+K)"
           >
             ⌘K
@@ -202,21 +202,21 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
       {/* Main App Container */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <div className="w-72 bg-[#f4f5f7] dark:bg-[#0c0f16] border-r border-black/[0.06] dark:border-white/[0.06] flex flex-col justify-between shrink-0">
+        <div className="w-72 bg-[#fafafa] dark:bg-black border-r border-neutral-200 dark:border-neutral-800 flex flex-col justify-between shrink-0">
           <div className="p-4 flex flex-col min-h-0 flex-1">
             {/* + New Chat Pill Button */}
             <button
               onClick={onNewChat}
-              className="w-full flex items-center gap-2 px-4 py-2.5 bg-[#1a73e8] hover:bg-[#1557b0] active:scale-[0.98] text-white rounded-full text-sm font-medium shadow-sm transition"
+              className="w-full flex items-center gap-2 px-4 py-2.5 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black active:scale-[0.98] rounded-full text-sm font-semibold shadow-sm transition"
             >
-              <div className="w-4 h-4 rounded-full border border-white flex items-center justify-center font-bold text-xs leading-none">
+              <div className="w-4 h-4 rounded-full border border-current flex items-center justify-center font-bold text-xs leading-none">
                 +
               </div>
               <span>New Chat</span>
             </button>
 
             {/* Recents Header */}
-            <div className="mt-6 mb-2 px-2 text-xs font-semibold text-gray-500 dark:text-gray-400">
+            <div className="mt-6 mb-2 px-2 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
               Recents
             </div>
 
@@ -232,8 +232,8 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                     onClick={() => onSelectConversation(conv.id)}
                     className={`group relative flex items-center justify-between px-3 py-2.5 rounded-2xl text-sm transition cursor-pointer ${
                       isSelected
-                        ? 'bg-[#dbeafe]/90 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-medium'
-                        : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200/60 dark:hover:bg-gray-800/60'
+                        ? 'bg-neutral-200/80 dark:bg-neutral-900 text-black dark:text-white font-medium border border-neutral-300 dark:border-neutral-800'
+                        : 'text-neutral-700 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900/60 hover:text-black dark:hover:text-white'
                     }`}
                   >
                     {isEditing ? (
@@ -246,11 +246,11 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                           type="text"
                           value={editTitle}
                           onChange={e => setEditTitle(e.target.value)}
-                          className="flex-1 px-2 py-0.5 text-xs rounded bg-white dark:bg-gray-800 border border-blue-500 outline-none"
+                          className="flex-1 px-2 py-0.5 text-xs rounded bg-white dark:bg-black border border-black dark:border-white text-black dark:text-white outline-none"
                           autoFocus
                           onBlur={() => handleSaveRename(conv.id)}
                         />
-                        <button type="submit" className="text-blue-600">
+                        <button type="submit" className="text-black dark:text-white">
                           <Check className="w-3.5 h-3.5" />
                         </button>
                       </form>
@@ -258,7 +258,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                       <>
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           {isSelected && (
-                            <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                            <MessageSquare className="w-4 h-4 text-black dark:text-white shrink-0" />
                           )}
                           <span className="truncate text-[13.5px]">{conv.title}</span>
                         </div>
@@ -267,7 +267,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                         <div className="hidden group-hover:flex items-center gap-1 shrink-0 ml-1">
                           <button
                             onClick={e => handleStartRename(conv, e)}
-                            className="p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                            className="p-1 rounded text-neutral-400 hover:text-black dark:hover:text-white"
                             title="Rename"
                           >
                             <Edit2 className="w-3 h-3" />
@@ -278,7 +278,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                                 e.stopPropagation();
                                 onDeleteConversation(conv.id);
                               }}
-                              className="p-1 rounded text-gray-400 hover:text-red-500"
+                              className="p-1 rounded text-neutral-400 hover:text-black dark:hover:text-white"
                               title="Delete chat"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -294,40 +294,40 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
           </div>
 
           {/* User Profile Footer (matching screenshot 0: JD jdoe@example.com ...) */}
-          <div className="p-3 border-t border-gray-200 dark:border-gray-800 relative">
+          <div className="p-3 border-t border-neutral-200 dark:border-neutral-800 relative bg-[#fafafa] dark:bg-black">
             <div
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="flex items-center justify-between p-2 rounded-2xl hover:bg-gray-200/50 dark:hover:bg-gray-800/50 cursor-pointer transition"
+              className="flex items-center justify-between p-2 rounded-2xl hover:bg-neutral-100 dark:hover:bg-neutral-900 cursor-pointer transition"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-[#7d8590] text-white flex items-center justify-center text-xs font-semibold shrink-0">
+                <div className="w-8 h-8 rounded-full bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white flex items-center justify-center text-xs font-semibold shrink-0 border border-neutral-300 dark:border-neutral-700">
                   JD
                 </div>
-                <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
+                <span className="text-sm font-medium text-black dark:text-white truncate">
                   jdoe@example.com
                 </span>
               </div>
-              <MoreHorizontal className="w-4 h-4 text-gray-500 shrink-0" />
+              <MoreHorizontal className="w-4 h-4 text-neutral-400 shrink-0" />
             </div>
 
             {/* User Dropdown Menu */}
             {showUserMenu && (
-              <div className="absolute bottom-16 left-3 right-3 bg-white dark:bg-[#1c222e] border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl py-2 z-30 text-xs">
+              <div className="absolute bottom-16 left-3 right-3 bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-xl py-2 z-30 text-xs">
                 <button
                   onClick={() => { setShowUserMenu(false); onOpenSettings(); }}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+                  className="w-full text-left px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900 text-black dark:text-white"
                 >
                   Settings & Gemini Status
                 </button>
                 <button
                   onClick={() => { setShowUserMenu(false); onOpenMemories(); }}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+                  className="w-full text-left px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900 text-black dark:text-white"
                 >
                   Memory Management
                 </button>
                 <button
                   onClick={() => { setShowUserMenu(false); onOpenMemes(); }}
-                  className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200"
+                  className="w-full text-left px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900 text-black dark:text-white"
                 >
                   Meme Library Catalog
                 </button>
@@ -337,12 +337,12 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col bg-white dark:bg-[#080a0f] min-w-0 transition-colors duration-200">
+        <div className="flex-1 flex flex-col bg-white dark:bg-black min-w-0 transition-colors duration-150">
           {/* Main Chat Header */}
-          <div className="h-14 px-8 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between shrink-0">
+          <div className="h-14 px-8 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between shrink-0 bg-white dark:bg-black">
             {/* Title */}
             <div className="flex items-center gap-3 min-w-0">
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
+              <h1 className="text-lg font-semibold text-black dark:text-white truncate">
                 {activeConversation?.title || 'Vadivelu AI'}
               </h1>
             </div>
@@ -350,15 +350,15 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
             {/* Right Header Controls */}
             <div className="flex items-center gap-4 shrink-0">
               {/* Voice Ready Badge */}
-              <div className="flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1 rounded-full border border-emerald-200/60 dark:border-emerald-800/60">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <div className="flex items-center gap-1.5 text-xs font-medium text-black dark:text-white bg-neutral-100 dark:bg-neutral-900 px-2.5 py-1 rounded-full border border-neutral-200 dark:border-neutral-800">
+                <span className="w-2 h-2 rounded-full bg-black dark:bg-white animate-pulse" />
                 <span>Voice ready</span>
               </div>
 
               {/* Info Icon */}
               <button
                 onClick={() => setShowInfoModal(!showInfoModal)}
-                className="p-2 rounded-xl text-gray-500 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                className="p-2 rounded-xl text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition"
                 title="Conversation info"
               >
                 <Info className="w-5 h-5" />
@@ -367,8 +367,8 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
               {/* Voice Mode Mic Trigger */}
               <button
                 onClick={onOpenVoiceMode}
-                className="p-2 rounded-xl text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-blue-950/40 hover:text-blue-600 transition"
-                title="Open Immersive Voice Mode"
+                className="p-2 rounded-xl text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white transition"
+                title="Open Live Voice Mode"
               >
                 <Mic className="w-5 h-5" />
               </button>
@@ -377,30 +377,30 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
           {/* Info Modal Dropdown */}
           {showInfoModal && (
-            <div className="mx-8 mt-2 p-4 bg-gray-50 dark:bg-[#161b22] border border-gray-200 dark:border-gray-800 rounded-2xl text-xs space-y-1.5 animate-in fade-in">
-              <div className="font-semibold text-gray-700 dark:text-gray-200">Session Information</div>
-              <p className="text-gray-500 dark:text-gray-400">
+            <div className="mx-8 mt-2 p-4 bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-2xl text-xs space-y-1.5 animate-in fade-in">
+              <div className="font-semibold text-black dark:text-white">Session Information</div>
+              <p className="text-neutral-500 dark:text-neutral-400">
                 Persona: <span className="font-medium capitalize">{activeConversation?.personality || 'funny_friend'}</span> • Messages: {messages.length} • Powered by Gemini Flash + Vadivelu Reaction Director
               </p>
             </div>
           )}
 
           {/* Messages Scroll Area */}
-          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6">
+          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 bg-white dark:bg-black">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto py-20 space-y-4">
-                <div className="w-16 h-16 rounded-3xl bg-gradient-to-tr from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg">
-                  <Sparkles className="w-8 h-8" />
+                <div className="w-14 h-14 rounded-2xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
+                  <Sparkles className="w-7 h-7" />
                 </div>
-                <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">
+                <h2 className="text-xl font-bold text-black dark:text-white">
                   Vadivelu AI Voice Companion
                 </h2>
-                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
                   Ask any question, explore ideas, or speak naturally. Iconic Vadivelu comedic punchlines will play at the perfect comedic moments!
                 </p>
                 <button
                   onClick={onOpenVoiceMode}
-                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-semibold shadow-md flex items-center gap-2"
+                  className="px-5 py-2.5 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black rounded-full text-xs font-semibold shadow-sm flex items-center gap-2"
                 >
                   <Mic className="w-4 h-4" />
                   <span>Launch Voice Mode</span>
@@ -414,7 +414,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                 if (isUser) {
                   return (
                     <div key={msg.id} className="flex justify-end">
-                      <div className="max-w-[75%] bg-[#1a73e8] text-white rounded-3xl rounded-br-lg px-5 py-3 text-[14.5px] leading-relaxed shadow-sm font-normal">
+                      <div className="max-w-[75%] bg-black text-white dark:bg-white dark:text-black rounded-3xl rounded-br-lg px-5 py-3 text-[14.5px] leading-relaxed shadow-xs font-normal">
                         {renderMessageContent(msg.content)}
                       </div>
                     </div>
@@ -425,25 +425,25 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                 return (
                   <div key={msg.id} className="flex items-start gap-3.5 max-w-[85%] group">
                     {/* Assistant Sparkle Icon Avatar */}
-                    <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-[#6366f1] to-[#8b5cf6] text-white flex items-center justify-center shrink-0 shadow-sm mt-0.5">
-                      <Sparkles className="w-4 h-4" />
+                    <div className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 text-black dark:text-white flex items-center justify-center shrink-0 shadow-xs mt-1">
+                      <Sparkles className="w-3.5 h-3.5" />
                     </div>
 
                     <div className="flex flex-col gap-2 min-w-0">
                       {/* Message Bubble */}
-                      <div className="bg-[#f0f2f5] dark:bg-[#121622] border border-black/[0.04] dark:border-white/[0.06] text-zinc-900 dark:text-zinc-100 rounded-3xl rounded-tl-lg px-6 py-4 text-[14.5px] leading-relaxed shadow-xs">
+                      <div className="bg-neutral-100 dark:bg-neutral-950 border border-neutral-200/80 dark:border-neutral-800 text-black dark:text-white rounded-3xl rounded-tl-lg px-6 py-4 text-[14.5px] leading-relaxed shadow-xs">
                         {renderMessageContent(msg.content)}
                       </div>
 
                       {/* Action Bar (Thumbs Up, Down, Copy, Read aloud) */}
-                      <div className="flex items-center gap-3 px-2 text-gray-500 dark:text-gray-400 text-xs">
+                      <div className="flex items-center gap-3 px-2 text-neutral-400 dark:text-neutral-500 text-xs">
                         {/* Thumbs up */}
                         <button
                           onClick={() => handleFeedback(msg.id, 'up')}
                           className={`p-1 rounded-md transition ${
                             feedbackState[msg.id] === 'up'
-                              ? 'text-blue-600 bg-blue-50 dark:bg-blue-950/40'
-                              : 'hover:text-gray-800 dark:hover:text-gray-200'
+                              ? 'text-black dark:text-white bg-neutral-200 dark:bg-neutral-800'
+                              : 'hover:text-black dark:hover:text-white'
                           }`}
                           title="Helpful"
                         >
@@ -455,8 +455,8 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                           onClick={() => handleFeedback(msg.id, 'down')}
                           className={`p-1 rounded-md transition ${
                             feedbackState[msg.id] === 'down'
-                              ? 'text-red-600 bg-red-50 dark:bg-red-950/40'
-                              : 'hover:text-gray-800 dark:hover:text-gray-200'
+                              ? 'text-black dark:text-white bg-neutral-200 dark:bg-neutral-800'
+                              : 'hover:text-black dark:hover:text-white'
                           }`}
                           title="Not helpful"
                         >
@@ -466,11 +466,11 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                         {/* Copy */}
                         <button
                           onClick={() => handleCopy(msg.content, msg.id)}
-                          className="p-1 rounded-md hover:text-gray-800 dark:hover:text-gray-200 transition"
+                          className="p-1 rounded-md hover:text-black dark:hover:text-white transition"
                           title="Copy to clipboard"
                         >
                           {copiedId === msg.id ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-500" />
+                            <Check className="w-3.5 h-3.5 text-black dark:text-white" />
                           ) : (
                             <Copy className="w-3.5 h-3.5" />
                           )}
@@ -481,8 +481,8 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                           onClick={() => onPlayMessageAudio(msg)}
                           className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition ${
                             isPlayingThis
-                              ? 'bg-blue-600 text-white shadow-xs'
-                              : 'hover:bg-gray-200/60 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'
+                              ? 'bg-black text-white dark:bg-white dark:text-black shadow-xs'
+                              : 'hover:bg-neutral-200/60 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300'
                           }`}
                           title="Perform speech & meme audio"
                         >
@@ -508,10 +508,10 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
           </div>
 
           {/* Bottom Input Area Pill (matching screenshot 0) */}
-          <div className="px-8 pb-3 pt-1 shrink-0">
+          <div className="px-8 pb-3 pt-1 shrink-0 bg-white dark:bg-black">
             <form
               onSubmit={handleSubmit}
-              className="relative max-w-4xl mx-auto bg-[#f0f2f5] dark:bg-[#121622] border border-black/[0.08] dark:border-white/[0.08] rounded-full px-4 py-2.5 flex items-center gap-3 shadow-xs focus-within:border-blue-500 dark:focus-within:border-blue-500 transition"
+              className="relative max-w-4xl mx-auto bg-neutral-50 dark:bg-black border border-neutral-300 dark:border-neutral-800 rounded-full px-4 py-2.5 flex items-center gap-3 shadow-xs focus-within:border-black dark:focus-within:border-white transition"
             >
               <input
                 ref={inputRef}
@@ -519,27 +519,27 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                 value={inputText}
                 onChange={e => setInputText(e.target.value)}
                 placeholder="Ask anything or click mic to speak..."
-                className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 px-2"
+                className="flex-1 bg-transparent border-none outline-none text-sm text-black dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 px-2"
               />
 
               {/* Attachment Paperclip */}
               <button
                 type="button"
                 onClick={onOpenMemes}
-                className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition"
+                className="p-2 text-neutral-400 hover:text-black dark:hover:text-white transition"
                 title="Attach meme sound"
               >
                 <Paperclip className="w-4 h-4" />
               </button>
 
-              {/* Blue Circular Mic Button (directly launches Live Voice Chat) */}
+              {/* Mic Button (solid monochrome) */}
               <button
                 type="button"
                 onClick={onOpenVoiceMode}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition shadow-sm ${
                   isListening
-                    ? 'bg-emerald-600 text-white animate-pulse ring-4 ring-emerald-300'
-                    : 'bg-[#1a73e8] hover:bg-[#1557b0] text-white active:scale-95'
+                    ? 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-black animate-pulse ring-4 ring-neutral-400'
+                    : 'bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black active:scale-95'
                 }`}
                 title="Start Live Voice Chat"
               >
@@ -552,8 +552,8 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                 disabled={!inputText.trim()}
                 className={`p-2 rounded-full transition ${
                   inputText.trim()
-                    ? 'text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40'
-                    : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                    ? 'bg-black text-white dark:bg-white dark:text-black hover:opacity-90'
+                    : 'text-neutral-300 dark:text-neutral-700 cursor-not-allowed'
                 }`}
                 title="Send message"
               >
@@ -562,7 +562,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
             </form>
 
             {/* Disclaimer footer */}
-            <div className="text-[11px] text-gray-400 dark:text-gray-500 text-center mt-2 font-normal">
+            <div className="text-[11px] text-neutral-400 dark:text-neutral-500 text-center mt-2 font-normal">
               AI Voice Chat can make mistakes. Consider checking important info.
             </div>
           </div>

@@ -75,41 +75,41 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
       <div 
-        className="w-full max-w-2xl bg-white dark:bg-[#161b22] border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-gray-900 dark:text-gray-100"
+        className="w-full max-w-2xl bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-black dark:text-white"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-black">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-2xl bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white border border-neutral-200 dark:border-neutral-800 flex items-center justify-center">
               <Brain className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Memory Management</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
+              <h2 className="text-lg font-semibold text-black dark:text-white">Memory Management</h2>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400">
                 Facts and preferences remembered across all conversations
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition"
+            className="p-2 text-neutral-400 hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-xl transition"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Action bar */}
-        <div className="px-6 py-3 border-b border-gray-100 dark:border-gray-800/80 bg-gray-50/50 dark:bg-gray-900/30 flex items-center justify-between">
-          <span className="text-xs font-medium text-gray-500">
+        <div className="px-6 py-3 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 flex items-center justify-between">
+          <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
             {memories.length} remembered {memories.length === 1 ? 'item' : 'items'}
           </span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowAddForm(!showAddForm)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-medium transition shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black rounded-xl text-xs font-semibold transition shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>{showAddForm ? 'Cancel' : 'Add Memory'}</span>
@@ -117,7 +117,7 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => 
             {memories.length > 0 && (
               <button
                 onClick={() => setShowClearConfirm(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl text-xs font-medium transition"
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-neutral-300 dark:border-neutral-700 text-black dark:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 rounded-xl text-xs font-medium transition"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Clear All</span>
@@ -128,21 +128,21 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => 
 
         {/* Clear Confirmation Banner */}
         {showClearConfirm && (
-          <div className="mx-6 mt-4 p-4 rounded-2xl bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2.5 text-xs text-red-700 dark:text-red-300">
+          <div className="mx-6 mt-4 p-4 rounded-2xl bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2.5 text-xs text-black dark:text-white">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>Delete all memories permanently? This cannot be undone.</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => setShowClearConfirm(false)}
-                className="px-2.5 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-white/50 rounded-lg"
+                className="px-2.5 py-1 text-xs text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 onClick={handleClearAll}
-                className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+                className="px-3 py-1 text-xs bg-black text-white dark:bg-white dark:text-black rounded-lg hover:opacity-90 font-medium"
               >
                 Yes, Delete All
               </button>
@@ -152,8 +152,8 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => 
 
         {/* Add Memory Form */}
         {showAddForm && (
-          <form onSubmit={handleAddSubmit} className="p-6 border-b border-gray-200 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/40 space-y-3">
-            <h4 className="text-xs font-semibold uppercase text-gray-500 tracking-wider">Add User Fact / Memory</h4>
+          <form onSubmit={handleAddSubmit} className="p-6 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 space-y-3">
+            <h4 className="text-xs font-semibold uppercase text-neutral-500 tracking-wider">Add User Fact / Memory</h4>
             <div className="grid grid-cols-3 gap-3">
               <input
                 type="text"
@@ -161,28 +161,28 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => 
                 placeholder="Key (e.g. favorite_tea)"
                 value={newKey}
                 onChange={e => setNewKey(e.target.value)}
-                className="px-3 py-2 text-xs rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 outline-none focus:border-emerald-500"
+                className="px-3 py-2 text-xs rounded-xl bg-white dark:bg-black border border-neutral-300 dark:border-neutral-700 text-black dark:text-white outline-none focus:border-black dark:focus:border-white"
               />
               <input
                 type="text"
                 required
-                placeholder="Fact content (e.g. Prefers Masala Chai with ginger, no sugar)"
+                placeholder="Fact content (e.g. Masala Chai, no sugar)"
                 value={newContent}
                 onChange={e => setNewContent(e.target.value)}
-                className="col-span-2 px-3 py-2 text-xs rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 outline-none focus:border-emerald-500"
+                className="col-span-2 px-3 py-2 text-xs rounded-xl bg-white dark:bg-black border border-neutral-300 dark:border-neutral-700 text-black dark:text-white outline-none focus:border-black dark:focus:border-white"
               />
             </div>
             <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setShowAddForm(false)}
-                className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg"
+                className="px-3 py-1.5 text-xs text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800 rounded-lg"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-3 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium shadow-sm"
+                className="px-3 py-1.5 text-xs bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black rounded-lg font-semibold shadow-sm"
               >
                 Save Memory
               </button>
@@ -191,24 +191,24 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => 
         )}
 
         {/* Memories List */}
-        <div className="overflow-y-auto p-6 space-y-3 flex-1">
+        <div className="overflow-y-auto p-6 space-y-3 flex-1 bg-white dark:bg-black">
           {loading ? (
-            <div className="text-center py-12 text-sm text-gray-400">Loading memories...</div>
+            <div className="text-center py-12 text-sm text-neutral-400">Loading memories...</div>
           ) : memories.length === 0 ? (
             <div className="text-center py-12 space-y-2">
-              <Database className="w-8 h-8 text-gray-400 mx-auto opacity-50" />
-              <p className="text-sm font-medium text-gray-500">No active memories stored</p>
-              <p className="text-xs text-gray-400">Vadivelu AI will automatically extract and save facts as you chat.</p>
+              <Database className="w-8 h-8 text-neutral-400 mx-auto opacity-50" />
+              <p className="text-sm font-medium text-neutral-500">No active memories stored</p>
+              <p className="text-xs text-neutral-400">Vadivelu AI will automatically extract and save facts as you chat.</p>
             </div>
           ) : (
             memories.map(item => (
               <div
                 key={item.id}
-                className="p-4 rounded-2xl border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40 hover:border-gray-200 dark:hover:border-gray-700 transition"
+                className="p-4 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 hover:border-neutral-300 dark:hover:border-neutral-700 transition"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
-                    <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-mono uppercase font-bold tracking-wider bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 mb-1.5">
+                    <span className="inline-block px-2 py-0.5 rounded-md text-[10px] font-mono uppercase font-bold tracking-wider bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white mb-1.5">
                       {item.key}
                     </span>
 
@@ -218,29 +218,29 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => 
                           type="text"
                           value={editContent}
                           onChange={e => setEditContent(e.target.value)}
-                          className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-gray-900 border border-emerald-500 outline-none"
+                          className="flex-1 px-3 py-1.5 text-xs rounded-lg bg-white dark:bg-black border border-neutral-400 dark:border-neutral-600 outline-none text-black dark:text-white"
                           autoFocus
                         />
                         <button
                           onClick={() => handleSaveEdit(item)}
-                          className="p-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+                          className="p-1.5 bg-black text-white dark:bg-white dark:text-black rounded-lg"
                         >
                           <Check className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setEditingId(null)}
-                          className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg"
+                          className="p-1.5 text-neutral-400 hover:text-black dark:hover:text-white rounded-lg"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     ) : (
-                      <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed font-normal">
+                      <p className="text-sm text-black dark:text-white leading-relaxed font-normal">
                         {item.content}
                       </p>
                     )}
 
-                    <div className="text-[10px] text-gray-400 mt-2">
+                    <div className="text-[10px] text-neutral-400 mt-2">
                       Saved {new Date(item.createdAt).toLocaleDateString()}
                     </div>
                   </div>
@@ -248,14 +248,14 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => 
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => handleStartEdit(item)}
-                      className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200/50 dark:hover:bg-gray-700/50 rounded-lg transition"
+                      className="p-1.5 text-neutral-400 hover:text-black dark:hover:text-white rounded-lg transition"
                       title="Edit memory"
                     >
                       <Edit3 className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => handleDelete(item.id)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition"
+                      className="p-1.5 text-neutral-400 hover:text-black dark:hover:text-white rounded-lg transition"
                       title="Delete memory"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -268,7 +268,7 @@ export const MemoryModal: React.FC<MemoryModalProps> = ({ isOpen, onClose }) => 
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#12161f] text-xs text-gray-400 text-center">
+        <div className="px-6 py-3.5 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-black text-xs text-neutral-400 text-center">
           Vadivelu AI injects relevant memories into context to deliver deeply personalized humor and answers.
         </div>
       </div>
