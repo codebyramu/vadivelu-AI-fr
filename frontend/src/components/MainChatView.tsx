@@ -18,6 +18,10 @@ import {
   Edit2,
   Play,
   Share2,
+  Sun,
+  Moon,
+  Monitor,
+  Settings,
 } from 'lucide-react';
 import { Conversation, Message, PersonalityPreset } from '../types';
 
@@ -42,6 +46,8 @@ interface MainChatViewProps {
   onStartPushToTalk: () => void;
   onStopPushToTalk: () => void;
   isListening: boolean;
+  themeChoice?: 'light' | 'dark' | 'system';
+  onToggleTheme?: () => void;
 }
 
 export const MainChatView: React.FC<MainChatViewProps> = ({
@@ -64,6 +70,8 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   onStartPushToTalk,
   onStopPushToTalk,
   isListening,
+  themeChoice = 'system',
+  onToggleTheme,
 }) => {
   const [inputText, setInputText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -144,21 +152,46 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-screen max-h-screen bg-gray-100 dark:bg-[#0d1117] text-gray-900 dark:text-gray-100 select-none overflow-hidden font-sans">
-      {/* macOS Window Title Bar */}
-      <div className="h-10 bg-[#e8e9ec] dark:bg-[#161b22] border-b border-gray-300 dark:border-gray-800 px-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#ff5f56] border border-[#e0443e] cursor-pointer" />
-          <div className="w-3 h-3 rounded-full bg-[#ffbd2e] border border-[#dea123] cursor-pointer" />
-          <div className="w-3 h-3 rounded-full bg-[#27c93f] border border-[#1aab29] cursor-pointer" />
+    <div className="flex flex-col h-screen max-h-screen bg-[#fbfbfa] dark:bg-[#080a0f] text-zinc-900 dark:text-zinc-100 select-none overflow-hidden font-sans transition-colors duration-200">
+      {/* Desktop App Window Title Bar (Clean, minimal, no colored dots) */}
+      <div className="h-10 bg-[#f0f2f5] dark:bg-[#0c0f16] border-b border-black/[0.06] dark:border-white/[0.06] px-4 flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-2.5">
+          <div className="w-5 h-5 rounded-md bg-gradient-to-tr from-zinc-700 to-zinc-900 dark:from-zinc-100 dark:to-zinc-300 text-white dark:text-zinc-900 flex items-center justify-center shadow-xs">
+            <Sparkles className="w-3 h-3" />
+          </div>
+          <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 tracking-tight">
+            AI Voice Chat
+          </span>
         </div>
-        <div className="text-xs font-medium text-gray-600 dark:text-gray-300 tracking-tight">
-          AI Voice Chat
+        <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 truncate max-w-sm">
+          {activeConversation?.title || 'Vadivelu AI'}
         </div>
-        <div className="w-12 text-right">
+        <div className="flex items-center gap-1.5">
+          {onToggleTheme && (
+            <button
+              onClick={onToggleTheme}
+              className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5 transition"
+              title={`Theme: ${themeChoice} (Click to toggle)`}
+            >
+              {themeChoice === 'dark' ? (
+                <Moon className="w-3.5 h-3.5" />
+              ) : themeChoice === 'light' ? (
+                <Sun className="w-3.5 h-3.5 text-amber-500" />
+              ) : (
+                <Monitor className="w-3.5 h-3.5" />
+              )}
+            </button>
+          )}
+          <button
+            onClick={onOpenSettings}
+            className="p-1 rounded-md text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-black/5 dark:hover:bg-white/5 transition"
+            title="Settings"
+          >
+            <Settings className="w-3.5 h-3.5" />
+          </button>
           <button
             onClick={onOpenCommandPalette}
-            className="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 border border-black/10 dark:border-white/10"
             title="Command Palette (Ctrl+K)"
           >
             ⌘K
@@ -168,8 +201,8 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
       {/* Main App Container */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Sidebar (matching screenshot 0) */}
-        <div className="w-72 bg-[#f4f5f7] dark:bg-[#12161f] border-r border-gray-200 dark:border-gray-800 flex flex-col justify-between shrink-0">
+        {/* Left Sidebar */}
+        <div className="w-72 bg-[#f4f5f7] dark:bg-[#0c0f16] border-r border-black/[0.06] dark:border-white/[0.06] flex flex-col justify-between shrink-0">
           <div className="p-4 flex flex-col min-h-0 flex-1">
             {/* + New Chat Pill Button */}
             <button
@@ -304,9 +337,9 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col bg-white dark:bg-[#0d1117] min-w-0">
+        <div className="flex-1 flex flex-col bg-white dark:bg-[#080a0f] min-w-0 transition-colors duration-200">
           {/* Main Chat Header */}
-          <div className="h-16 px-8 border-b border-gray-100 dark:border-gray-800/80 flex items-center justify-between shrink-0">
+          <div className="h-14 px-8 border-b border-black/[0.06] dark:border-white/[0.06] flex items-center justify-between shrink-0">
             {/* Title */}
             <div className="flex items-center gap-3 min-w-0">
               <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
@@ -398,7 +431,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
                     <div className="flex flex-col gap-2 min-w-0">
                       {/* Message Bubble */}
-                      <div className="bg-[#f2f4f7] dark:bg-[#1a202c] text-gray-900 dark:text-gray-100 rounded-3xl rounded-tl-lg px-6 py-4 text-[14.5px] leading-relaxed shadow-xs">
+                      <div className="bg-[#f0f2f5] dark:bg-[#121622] border border-black/[0.04] dark:border-white/[0.06] text-zinc-900 dark:text-zinc-100 rounded-3xl rounded-tl-lg px-6 py-4 text-[14.5px] leading-relaxed shadow-xs">
                         {renderMessageContent(msg.content)}
                       </div>
 
@@ -478,43 +511,37 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
           <div className="px-8 pb-3 pt-1 shrink-0">
             <form
               onSubmit={handleSubmit}
-              className="relative max-w-4xl mx-auto bg-[#f4f5f7] dark:bg-[#161c26] border border-gray-200 dark:border-gray-800 rounded-full px-4 py-2.5 flex items-center gap-3 shadow-xs focus-within:border-blue-500 dark:focus-within:border-blue-500 transition"
+              className="relative max-w-4xl mx-auto bg-[#f0f2f5] dark:bg-[#121622] border border-black/[0.08] dark:border-white/[0.08] rounded-full px-4 py-2.5 flex items-center gap-3 shadow-xs focus-within:border-blue-500 dark:focus-within:border-blue-500 transition"
             >
               <input
                 ref={inputRef}
                 type="text"
                 value={inputText}
                 onChange={e => setInputText(e.target.value)}
-                placeholder="Ask anything or hold mic to speak..."
-                className="flex-1 bg-transparent border-none outline-none text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 px-2"
+                placeholder="Ask anything or click mic to speak..."
+                className="flex-1 bg-transparent border-none outline-none text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 px-2"
               />
 
               {/* Attachment Paperclip */}
               <button
                 type="button"
                 onClick={onOpenMemes}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"
+                className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition"
                 title="Attach meme sound"
               >
                 <Paperclip className="w-4 h-4" />
               </button>
 
-              {/* Blue Circular Mic Button (supports push-to-talk & voice mode) */}
+              {/* Blue Circular Mic Button (directly launches Live Voice Chat) */}
               <button
                 type="button"
-                onMouseDown={onStartPushToTalk}
-                onMouseUp={onStopPushToTalk}
-                onTouchStart={onStartPushToTalk}
-                onTouchEnd={onStopPushToTalk}
-                onClick={() => {
-                  if (!isListening) onOpenVoiceMode();
-                }}
+                onClick={onOpenVoiceMode}
                 className={`w-9 h-9 rounded-full flex items-center justify-center transition shadow-sm ${
                   isListening
-                    ? 'bg-red-500 text-white animate-pulse ring-4 ring-red-300'
+                    ? 'bg-emerald-600 text-white animate-pulse ring-4 ring-emerald-300'
                     : 'bg-[#1a73e8] hover:bg-[#1557b0] text-white active:scale-95'
                 }`}
-                title="Hold to speak (Push to talk) or click for Voice Mode"
+                title="Start Live Voice Chat"
               >
                 <Mic className="w-4 h-4" />
               </button>

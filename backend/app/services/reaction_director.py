@@ -1,4 +1,6 @@
-"""Reaction Director: Orchestrates dynamic Gemini responses interleaved with iconic meme reactions."""
+"""Reaction Director: Orchestrates dynamic Gemini responses interleaved with iconic meme reactions,
+using true Gemini tool calling for intelligent meme discovery and server-side speech pre-synthesis.
+"""
 
 import json
 import logging
@@ -27,18 +29,20 @@ from app.models.schemas import (
 from app.services.gemini_service import gemini_service
 from app.services.meme_service import meme_service
 from app.services.memory_service import memory_service
+from app.services.tool_service import tool_registry
+from app.services.tts_service import get_cache_key, resolve_voice, tts_service
 
 logger = logging.getLogger("vadivelu.director")
 
-DIRECTOR_SYSTEM_PROMPT = """You are the Reaction Director for "Vadivelu AI" — a witty, charismatic, Apple-inspired conversational AI voice companion inspired by legendary Tamil cinema comedy timing and modern warmth.
+DIRECTOR_SYSTEM_PROMPT = """You are the Reaction Director for "Vadivelu AI" — a witty, intelligent conversational AI voice companion inspired by legendary Tamil cinema comedy timing and modern Apple minimalist warmth.
 
-Your goal is not just to generate text, but to DIRECT A COMPLETE SPOKEN AND MEME PERFORMANCE. You interleave your spoken dialogue with iconic meme sound clips.
+You do NOT just generate text. You DIRECT A HIGH-QUALITY SPOKEN AUDIO AND MEME PERFORMANCE.
 
 Directing Guidelines:
 1. RESPONSE LENGTH & TONE:
-   - Casual conversation / quick queries: Short, punchy, natural (1-3 conversational sentences).
-   - Technical / educational queries: Clear, structured, helpful step-by-step explanations.
-   - Serious / emotional / distress / health queries: Warm, empathetic, supportive, and STRICTLY DO NOT USE ANY MEMES.
+   - Casual conversation / quick queries: Short, punchy, conversational (1-3 sentences total).
+   - Technical / educational queries: Clear, structured, helpful step-by-step explanations with subtle wit.
+   - Serious / emotional / distress queries: Warm, empathetic, supportive, and STRICTLY DO NOT USE ANY MEMES.
    - Personality Presets:
      * normal: Friendly, balanced, witty timing.
      * funny_friend: Playful banter, comedic exaggeration.
@@ -47,19 +51,20 @@ Directing Guidelines:
      * calm_supportive: Gentle, encouraging, comforting.
      * study_technical: Precise, clear, structured.
 
-2. MEME PLACEMENT RULES:
-   - Only choose meme IDs from the [AVAILABLE MEMES IN SOUNDBOARD] list provided below.
-   - Use AT MOST 1 or 2 memes per response where they genuinely improve the moment.
-   - You can place memes before speech, between speech sentences, or after speech.
-   - If no meme fits or the topic is serious, do NOT include any meme segment.
+2. INTELLIGENT MEME SELECTION VIA TOOLS:
+   - You have access to real tools:
+     * `search_meme_library(query, emotion)`: Search the soundboard by keyword or emotion.
+     * `list_available_memes()`: List all memes currently ready and not on cooldown.
+     * `lookup_user_memories(topic)`: Retrieve long-term memories and facts about the user.
+   - When a user's context, victory, financial move, shocking news, or joke would genuinely be improved by a meme reaction, CALL `search_meme_library` to find the most fitting clip.
+   - Intelligently decide whether to use a meme, which meme fits best, and where to place it between your spoken words.
+   - If no meme fits or the situation is serious, do NOT force a meme; simply speak naturally.
+   - NEVER invent fake meme IDs. Only use IDs returned by the tool.
 
 3. CONTEXTUAL CALLBACKS:
-   - Check the RECALLED USER MEMORIES below. If the user previously mentioned a goal, pet, profession, or hobby, make a natural, witty connection.
+   - When appropriate, connect recalled user memories (training, goals, pets, job) into your speech naturally.
 
-4. EXTRACT NEW USER FACTS:
-   - If the user shares a personal fact (e.g., "I'm training for a marathon", "My dog is Rocky", "I'm an iOS engineer"), include it in the "newMemories" list.
-
-5. OUTPUT FORMAT:
+4. FINAL RESPONSE OUTPUT FORMAT:
    Return ONLY a strict JSON object with this exact schema:
    {
      "voice": "female" | "male",
@@ -67,7 +72,7 @@ Directing Guidelines:
      "reasoning": "brief director notes explaining tone and placement",
      "segments": [
        { "type": "speech", "text": "spoken part 1" },
-       { "type": "meme", "memeId": "valid_meme_id_here" },
+       { "type": "meme", "memeId": "valid_meme_id_from_tool" },
        { "type": "speech", "text": "spoken part 2" }
      ],
      "newMemories": [
@@ -105,18 +110,18 @@ def extract_json_from_gemini(raw_text: str) -> Dict[str, Any]:
         except Exception:
             pass
 
-    # If all parsing fails, construct dynamic plan from raw text
+    # Fallback plan from raw conversational text
     return {
         "voice": "female",
         "emotion": "neutral",
-        "reasoning": "Direct Gemini conversational response",
+        "reasoning": "Direct Gemini conversational speech",
         "segments": [{"type": "speech", "text": text}],
         "newMemories": [],
     }
 
 
 class ReactionDirector:
-    """Orchestrates structured audio performances via dynamic Gemini generation."""
+    """Orchestrates structured audio performances via dynamic Gemini generation and tool calling."""
 
     async def plan_performance(
         self,
@@ -142,26 +147,14 @@ class ReactionDirector:
                 "No Gemini API keys configured. Please add your GEMINI_API_KEY_1 to .env or configure in Settings to chat."
             )
 
-        # Retrieve active memories and meme catalog
-        active_memories = await memory_service.list_memories(active_only=True)
         all_memes = await meme_service.list_memes()
         meme_map = {m["id"]: m for m in all_memes}
-        available_memes = [m for m in all_memes if m.get("isAvailableNow", True)]
-
-        # Format prompt sections
-        memories_text = memory_service.format_memories_for_prompt(active_memories)
-        memes_text = (
-            meme_service.format_memes_for_director(available_memes)
-            if memes_enabled
-            else "Memes are currently DISABLED by user settings. Do not include meme segments."
-        )
 
         system_instruction = (
             f"{DIRECTOR_SYSTEM_PROMPT}\n\n"
-            f"Active Personality: {personality}\n"
-            f"Default Voice: {default_voice}\n\n"
-            f"{memories_text}\n\n"
-            f"[AVAILABLE MEMES IN SOUNDBOARD]:\n{memes_text}\n"
+            f"Active Personality Preset: {personality}\n"
+            f"Default Voice Tone: {default_voice}\n"
+            f"Memes Enabled Status: {'YES' if memes_enabled else 'DISABLED by user settings'}\n"
         )
 
         # Build contents from recent history + new message
@@ -171,13 +164,17 @@ class ReactionDirector:
             contents.append({"role": role, "parts": [{"text": h["content"]}]})
         contents.append({"role": "user", "parts": [{"text": user_message}]})
 
-        # Generate dynamically via Gemini API
+        # Provide tool calling so Gemini can search the meme soundboard intelligently
+        tools = tool_registry.get_gemini_tools_spec() if memes_enabled else None
+
         raw_text, key_alias = await gemini_service.generate_content(
             contents=contents,
             system_instruction=system_instruction,
+            tools=tools,
+            tool_executor=tool_registry.execute_tool if tools else None,
         )
 
-        # Parse response safely
+        # Parse plan safely
         plan_dict = extract_json_from_gemini(raw_text)
 
         # Process new memories extracted by LLM
@@ -191,7 +188,7 @@ class ReactionDirector:
                 )
                 new_memory_keys.append(item["key"])
 
-        # Also run heuristics to catch explicit user declarations (training, profession, pet, etc.)
+        # Also run heuristics to catch explicit personal facts
         heuristic_keys = await memory_service.record_user_facts(
             user_message, source_conv_id=conversation_id
         )
@@ -199,33 +196,33 @@ class ReactionDirector:
             if hk not in new_memory_keys:
                 new_memory_keys.append(hk)
 
-        # Enrich and sanitize segments
-        raw_segments = plan_dict.get("segments", [])
-        validated_segments = await self._enrich_segments(
-            raw_segments, meme_map, memes_enabled
-        )
-
-        # Ensure selected voice matches override if provided
         final_voice = voice_override or plan_dict.get("voice", default_voice)
         if final_voice not in ("female", "male"):
             final_voice = default_voice
 
+        # Enrich segments and pre-synthesize TTS audio on the server
+        raw_segments = plan_dict.get("segments", [])
+        validated_segments = await self._enrich_and_presynthesize_segments(
+            raw_segments, meme_map, memes_enabled, final_voice
+        )
+
         plan = PerformancePlan(
             voice=final_voice,
             emotion=plan_dict.get("emotion", "neutral"),
-            reasoning=plan_dict.get("reasoning", "Dynamic Gemini response"),
+            reasoning=plan_dict.get("reasoning", "Dynamic reaction performance with tool discovery"),
             segments=validated_segments,
         )
 
         return plan, new_memory_keys, key_alias
 
-    async def _enrich_segments(
+    async def _enrich_and_presynthesize_segments(
         self,
         raw_segments: List[Dict[str, Any]],
         meme_map: Dict[str, Dict[str, Any]],
         memes_enabled: bool,
+        voice: str,
     ) -> List[PerformanceSegment]:
-        """Validate, hydrate metadata, and record cooldown usage for meme segments."""
+        """Validate, hydrate metadata, record meme cooldowns, and pre-synthesize speech audio."""
         enriched: List[PerformanceSegment] = []
 
         for seg in raw_segments:
@@ -233,14 +230,24 @@ class ReactionDirector:
             if seg_type == "speech":
                 text = str(seg.get("text", "")).strip()
                 if text:
-                    enriched.append(SpeechSegment(text=text))
+                    # Pre-synthesize or fetch cached audio for this speech segment on server
+                    try:
+                        resolved_voice = resolve_voice(voice)
+                        await tts_service.synthesize(text=text, voice=resolved_voice)
+                        cache_key = get_cache_key(text, resolved_voice, None, None)
+                        audio_url = f"/cache/{cache_key}.mp3"
+                    except Exception as e:
+                        logger.warning(f"Server-side pre-synthesis failed for text '{text[:20]}...': {e}")
+                        audio_url = None
+
+                    enriched.append(SpeechSegment(text=text, audio_url=audio_url))
 
             elif seg_type == "meme" and memes_enabled:
                 meme_id = seg.get("memeId")
                 meme = meme_map.get(meme_id)
-                # Ensure meme exists and is not in cooldown
+                # Ensure meme exists and is not on cooldown
                 if meme and meme.get("isAvailableNow", True):
-                    # Record usage to trigger cooldown
+                    # Trigger cooldown
                     await meme_service.record_usage(meme_id)
                     enriched.append(
                         MemeSegment(
@@ -252,19 +259,21 @@ class ReactionDirector:
                         )
                     )
                 else:
-                    logger.info(
-                        f"Meme {meme_id} is unavailable or on cooldown. Skipping from performance."
-                    )
+                    logger.info(f"Meme '{meme_id}' is unavailable or on cooldown. Skipping.")
             elif seg_type == "pause":
-                enriched.append(PauseSegment(duration_ms=seg.get("durationMs", 400)))
+                enriched.append(PauseSegment(duration_ms=seg.get("durationMs", 350)))
 
         # Fallback if no valid speech segments were returned
         if not enriched:
-            enriched.append(
-                SpeechSegment(
-                    text="I understand! Let's continue."
-                )
-            )
+            fallback_text = "I am listening! How can I help you next?"
+            try:
+                resolved_voice = resolve_voice(voice)
+                await tts_service.synthesize(text=fallback_text, voice=resolved_voice)
+                cache_key = get_cache_key(fallback_text, resolved_voice, None, None)
+                fallback_url = f"/cache/{cache_key}.mp3"
+            except Exception:
+                fallback_url = None
+            enriched.append(SpeechSegment(text=fallback_text, audio_url=fallback_url))
 
         return enriched
 

@@ -1,8 +1,8 @@
-"""Gemini API Client with Multi-Key Round-Robin Failover and Error Categorization."""
+"""Gemini API Client with Multi-Key Round-Robin Failover, Tool Calling, and Error Categorization."""
 
 import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Coroutine, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -23,7 +23,7 @@ GEMINI_API_URL_TEMPLATE = (
 
 
 class GeminiService:
-    """Dispatches calls to Gemini API with automatic rotation across keys."""
+    """Dispatches calls to Gemini API with automatic key rotation and function calling support."""
 
     def __init__(self, model: Optional[str] = None):
         self.model = model or settings.GEMINI_MODEL
@@ -33,9 +33,12 @@ class GeminiService:
         contents: List[Dict[str, Any]],
         system_instruction: Optional[str] = None,
         generation_config: Optional[Dict[str, Any]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
+        tool_executor: Optional[Callable[[str, Dict[str, Any]], Coroutine[Any, Any, Dict[str, Any]]]] = None,
+        max_tool_turns: int = 3,
         max_retries: int = 3,
     ) -> Tuple[str, str]:
-        """Generate content via Gemini, rotating keys automatically on errors.
+        """Generate content via Gemini, supporting tool calling and automatic key failover.
 
         Returns:
             Tuple[str, str]: (raw_response_text, key_alias_used)
@@ -45,27 +48,79 @@ class GeminiService:
                 "No Gemini API keys configured. Please add GEMINI_API_KEY_1 to .env"
             )
 
-        # Build payload
-        payload: Dict[str, Any] = {"contents": contents}
+        working_contents = list(contents)
+        primary_key_alias = ""
+        current_turn = 0
 
-        if system_instruction:
-            payload["systemInstruction"] = {
-                "parts": [{"text": system_instruction}]
+        while current_turn <= max_tool_turns:
+            current_turn += 1
+
+            payload: Dict[str, Any] = {"contents": working_contents}
+            if system_instruction:
+                payload["systemInstruction"] = {
+                    "parts": [{"text": system_instruction}]
+                }
+
+            if tools:
+                payload["tools"] = tools
+
+            # Default configuration
+            default_config = {
+                "temperature": 0.7,
+                "maxOutputTokens": 1024,
             }
+            if generation_config:
+                default_config.update(generation_config)
+            payload["generationConfig"] = default_config
 
-        default_config = {
-            "temperature": 0.7,
-            "maxOutputTokens": 1024,
-            "responseMimeType": "application/json",
-        }
-        if generation_config:
-            default_config.update(generation_config)
-        payload["generationConfig"] = default_config
+            # Execute with key rotation
+            candidate_part, key_alias = await self._dispatch_with_failover(payload, max_retries=max_retries)
+            if not primary_key_alias:
+                primary_key_alias = key_alias
 
+            # Check if Gemini requested a function call
+            func_call = candidate_part.get("functionCall")
+            if func_call and tool_executor and current_turn <= max_tool_turns:
+                func_name = func_call.get("name", "")
+                func_args = func_call.get("args", {})
+                logger.info(f"Gemini requested tool call: {func_name}({func_args}) via {key_alias}")
+
+                # 1. Append model's tool call to conversation history
+                working_contents.append({
+                    "role": "model",
+                    "parts": [{"functionCall": func_call}],
+                })
+
+                # 2. Execute the tool
+                tool_output = await tool_executor(func_name, func_args)
+
+                # 3. Append function result to conversation history
+                working_contents.append({
+                    "role": "function",
+                    "parts": [{
+                        "functionResponse": {
+                            "name": func_name,
+                            "response": tool_output,
+                        }
+                    }],
+                })
+
+                # Continue next turn with tool result included
+                continue
+
+            # No function call, we have the final textual/json response!
+            text = candidate_part.get("text", "")
+            return text.strip(), primary_key_alias
+
+        return "", primary_key_alias
+
+    async def _dispatch_with_failover(
+        self, payload: Dict[str, Any], max_retries: int = 3
+    ) -> Tuple[Dict[str, Any], str]:
+        """Sends single request to Gemini with bounded rotation and error categorization."""
         attempts = 0
         total_available = max(1, key_rotator.total_keys)
         retry_limit = min(max_retries, total_available)
-
         last_error_msg = ""
 
         while attempts < retry_limit:
@@ -89,9 +144,11 @@ class GeminiService:
                         raise ValueError("No candidates returned from Gemini API.")
 
                     parts = candidates[0].get("content", {}).get("parts", [])
-                    text_parts = [p.get("text", "") for p in parts if "text" in p]
-                    raw_text = "".join(text_parts).strip()
-                    return raw_text, key_info.alias
+                    if not parts:
+                        raise ValueError("Empty parts returned in candidate.")
+
+                    # Return the first part (can be text or functionCall)
+                    return parts[0], key_info.alias
 
                 # Non-200 status code
                 error_body = response.text

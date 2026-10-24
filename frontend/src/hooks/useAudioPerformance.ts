@@ -10,6 +10,12 @@ export interface ActiveMemeInfo {
 
 export type PlaybackStatus = 'idle' | 'preparing' | 'playing_speech' | 'playing_meme' | 'paused' | 'interrupted';
 
+interface PreloadedItem {
+  segment: PerformanceSegment;
+  audio: HTMLAudioElement | null;
+  textToSpeakFallback?: string;
+}
+
 export function useAudioPerformance(options?: {
   defaultSpeechVolume?: number;
   defaultMemeVolume?: number;
@@ -48,7 +54,9 @@ export function useAudioPerformance(options?: {
   // Initialize Web Audio Context and AnalyserNode
   const getAudioContextAndAnalyser = useCallback(() => {
     if (!audioContextRef.current) {
-      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         const ctx = new AudioCtx();
         const analyser = ctx.createAnalyser();
@@ -87,20 +95,55 @@ export function useAudioPerformance(options?: {
     setCurrentSegmentIndex(-1);
     setTimeout(() => {
       setStatus('idle');
-    }, 200);
+    }, 150);
   }, []);
 
-  // Helper to play an HTMLAudioElement with ended promise
-  const playAudioUrl = useCallback((url: string, volume: number): Promise<void> => {
+  // Preload a single audio element into browser memory buffer
+  const preloadAudio = useCallback((url: string, volume: number): Promise<HTMLAudioElement | null> => {
+    return new Promise((resolve) => {
+      if (!url) {
+        resolve(null);
+        return;
+      }
+      const audio = new Audio();
+      audio.crossOrigin = 'anonymous';
+      audio.preload = 'auto';
+      audio.volume = Math.max(0, Math.min(1, volume));
+
+      let resolved = false;
+      const done = (element: HTMLAudioElement | null) => {
+        if (!resolved) {
+          resolved = true;
+          audio.removeEventListener('canplaythrough', onReady);
+          audio.removeEventListener('loadeddata', onReady);
+          audio.removeEventListener('error', onError);
+          resolve(element);
+        }
+      };
+
+      const onReady = () => done(audio);
+      const onError = () => done(null); // Fallback gracefully if asset is missing
+
+      audio.addEventListener('canplaythrough', onReady, { once: true });
+      audio.addEventListener('loadeddata', onReady, { once: true });
+      audio.addEventListener('error', onError, { once: true });
+
+      // Timeout fallback in case canplaythrough takes too long
+      setTimeout(() => done(audio), 4000);
+
+      audio.src = url;
+      audio.load();
+    });
+  }, []);
+
+  // Play an already preloaded HTMLAudioElement and await completion
+  const playPreloadedAudio = useCallback((audio: HTMLAudioElement, volume: number): Promise<void> => {
     return new Promise((resolve) => {
       if (isCancelledRef.current) {
         resolve();
         return;
       }
 
-      const audio = new Audio();
-      audio.crossOrigin = 'anonymous';
-      audio.src = url;
       audio.volume = Math.max(0, Math.min(1, volume));
       activeAudioRef.current = audio;
 
@@ -111,7 +154,7 @@ export function useAudioPerformance(options?: {
           const source = ctx.createMediaElementSource(audio);
           source.connect(analyser);
         } catch {
-          // MediaElementAudioSource already connected or CORS
+          // MediaElementSource already connected or CORS
         }
       }
 
@@ -133,18 +176,17 @@ export function useAudioPerformance(options?: {
         resolve();
       };
 
-      audio.addEventListener('ended', onEnded);
-      audio.addEventListener('error', onError);
+      audio.addEventListener('ended', onEnded, { once: true });
+      audio.addEventListener('error', onError, { once: true });
 
       audio.play().catch(() => {
-        // Audio playback failed (e.g. autoplay restriction or missing file)
         cleanup();
         resolve();
       });
     });
   }, [getAudioContextAndAnalyser]);
 
-  // Fallback TTS using browser Web Speech API
+  // Fallback TTS using browser Web Speech API if audio synthesis was completely offline
   const speakWithBrowserSpeech = useCallback((text: string, voiceGender: VoiceGender = 'female'): Promise<void> => {
     return new Promise((resolve) => {
       if (isCancelledRef.current || !('speechSynthesis' in window)) {
@@ -160,9 +202,13 @@ export function useAudioPerformance(options?: {
 
       const voices = window.speechSynthesis.getVoices();
       if (voices.length > 0) {
-        const preferredVoice = voices.find(v => 
-          (voiceGender === 'female' ? /female|woman|Samantha|Victoria|Google UK English Female/i : /male|man|Daniel|Alex|Google UK English Male/i).test(v.name)
-        ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
+        const preferredVoice =
+          voices.find(v =>
+            (voiceGender === 'female'
+              ? /female|woman|Samantha|Victoria|Google UK English Female/i
+              : /male|man|Daniel|Alex|Google UK English Male/i
+            ).test(v.name)
+          ) || voices.find(v => v.lang.startsWith('en')) || voices[0];
         if (preferredVoice) {
           utterance.voice = preferredVoice;
         }
@@ -175,9 +221,9 @@ export function useAudioPerformance(options?: {
     });
   }, []);
 
-  // Main playback executor
+  // Main playback executor: Preloads ALL assets first, then plays smoothly with ZERO gaps
   const playPerformance = useCallback(async (plan: PerformancePlan) => {
-    // Stop any existing playback
+    // 1. Interrupt any ongoing playback
     interrupt();
     isCancelledRef.current = false;
 
@@ -186,82 +232,109 @@ export function useAudioPerformance(options?: {
     }
 
     setIsPlaying(true);
-    setStatus('preparing');
+    setStatus('preparing'); // Displays "Preparing audio..." indicator
     setTotalSegments(plan.segments.length);
 
-    // Phase 1: Preload / Synthesize all speech segment audio URLs
-    const preparedSegments = [...plan.segments];
-    for (let i = 0; i < preparedSegments.length; i++) {
-      if (isCancelledRef.current) return;
-      const seg = preparedSegments[i];
-      if (seg.type === 'speech' && !seg.audioUrl) {
-        try {
-          const synthesizedUrl = await api.synthesizeTTS(seg.text, plan.voice || 'female');
-          if (synthesizedUrl) {
-            preparedSegments[i] = { ...seg, audioUrl: synthesizedUrl };
+    // =========================================================================
+    // PHASE 1: PRELOAD ALL AUDIO IN ADVANCE (Parallel synthesis & audio loading)
+    // =========================================================================
+    try {
+      const preloadPromises: Promise<PreloadedItem>[] = plan.segments.map(async (seg) => {
+        if (isCancelledRef.current) {
+          return { segment: seg, audio: null };
+        }
+
+        if (seg.type === 'speech') {
+          let url = seg.audioUrl;
+          // If not pre-synthesized by server, synthesize now
+          if (!url) {
+            try {
+              url = await api.synthesizeTTS(seg.text, plan.voice || 'female');
+            } catch (err) {
+              loggerWarn('TTS synthesis error during preload:', err);
+              url = undefined;
+            }
           }
-        } catch {
-          // Will use browser speech synthesis fallback during playback
+
+          if (url) {
+            const preloadedAudio = await preloadAudio(url, speechVolumeRef.current);
+            return { segment: seg, audio: preloadedAudio, textToSpeakFallback: seg.text };
+          }
+          return { segment: seg, audio: null, textToSpeakFallback: seg.text };
+        }
+
+        if (seg.type === 'meme') {
+          const memeSeg = seg as MemeSegment;
+          let memeUrl = memeSeg.audioUrl;
+          if (!memeUrl) {
+            memeUrl = `/memes/${memeSeg.memeId}.mp3`;
+          }
+          const preloadedAudio = await preloadAudio(memeUrl, memeVolumeRef.current);
+          return { segment: seg, audio: preloadedAudio };
+        }
+
+        // Pause segment
+        return { segment: seg, audio: null };
+      });
+
+      // Wait until ALL audio assets are 100% prepared and ready before playing
+      const preloadedItems = await Promise.all(preloadPromises);
+
+      if (isCancelledRef.current) return;
+
+      // =========================================================================
+      // PHASE 2: SMOOTH SEQUENTIAL PLAYBACK (Speech → Meme → Speech with ZERO gaps)
+      // =========================================================================
+      for (let i = 0; i < preloadedItems.length; i++) {
+        if (isCancelledRef.current) break;
+
+        const item = preloadedItems[i];
+        const segment = item.segment;
+        setCurrentSegmentIndex(i);
+        setCurrentSegment(segment);
+
+        if (segment.type === 'speech') {
+          setStatus('playing_speech');
+          setActiveMeme(null);
+
+          if (item.audio) {
+            await playPreloadedAudio(item.audio, speechVolumeRef.current);
+          } else if (item.textToSpeakFallback) {
+            await speakWithBrowserSpeech(item.textToSpeakFallback, plan.voice);
+          }
+        } else if (segment.type === 'meme') {
+          const memeSeg = segment as MemeSegment;
+          setStatus('playing_meme');
+          setActiveMeme({
+            memeId: memeSeg.memeId,
+            title: memeSeg.title || memeSeg.memeId,
+            thumbnailUrl: memeSeg.thumbnailUrl,
+          });
+
+          if (item.audio) {
+            await playPreloadedAudio(item.audio, memeVolumeRef.current);
+          } else {
+            // Short delay if audio failed to load
+            await new Promise((r) => setTimeout(r, memeSeg.durationMs || 1000));
+          }
+        } else if (segment.type === 'pause') {
+          setStatus('paused');
+          await new Promise((r) => setTimeout(r, segment.durationMs || 350));
         }
       }
-    }
-
-    if (isCancelledRef.current) return;
-
-    // Phase 2: Sequential execution
-    for (let i = 0; i < preparedSegments.length; i++) {
-      if (isCancelledRef.current) break;
-
-      const segment = preparedSegments[i];
-      setCurrentSegmentIndex(i);
-      setCurrentSegment(segment);
-
-      if (segment.type === 'speech') {
-        setStatus('playing_speech');
+    } catch (err) {
+      console.error('Audio performance execution failed:', err);
+    } finally {
+      if (!isCancelledRef.current) {
+        setIsPlaying(false);
+        setStatus('idle');
         setActiveMeme(null);
-
-        if (segment.audioUrl) {
-          await playAudioUrl(segment.audioUrl, speechVolumeRef.current);
-        } else {
-          await speakWithBrowserSpeech(segment.text, plan.voice);
-        }
-      } else if (segment.type === 'meme') {
-        const memeSeg = segment as MemeSegment;
-        setStatus('playing_meme');
-        setActiveMeme({
-          memeId: memeSeg.memeId,
-          title: memeSeg.title || memeSeg.memeId,
-          thumbnailUrl: memeSeg.thumbnailUrl,
-        });
-
-        // Determine audio url for meme
-        let memeAudioUrl = memeSeg.audioUrl;
-        if (!memeAudioUrl) {
-          // If no direct url, try catalog audio
-          memeAudioUrl = `/audio/memes/${memeSeg.memeId}.mp3`;
-        }
-
-        if (memeAudioUrl) {
-          await playAudioUrl(memeAudioUrl, memeVolumeRef.current);
-        } else {
-          // Fallback short pause if audio file not loaded
-          await new Promise(r => setTimeout(r, memeSeg.durationMs || 1500));
-        }
-      } else if (segment.type === 'pause') {
-        setStatus('paused');
-        await new Promise(r => setTimeout(r, segment.durationMs || 300));
+        setCurrentSegment(null);
+        setCurrentSegmentIndex(-1);
+        options?.onFinished?.();
       }
     }
-
-    if (!isCancelledRef.current) {
-      setIsPlaying(false);
-      setStatus('idle');
-      setActiveMeme(null);
-      setCurrentSegment(null);
-      setCurrentSegmentIndex(-1);
-      options?.onFinished?.();
-    }
-  }, [interrupt, playAudioUrl, speakWithBrowserSpeech, options]);
+  }, [interrupt, preloadAudio, playPreloadedAudio, speakWithBrowserSpeech, options]);
 
   return {
     isPlaying,
@@ -280,4 +353,8 @@ export function useAudioPerformance(options?: {
     audioContext: audioContextRef.current,
     getAudioContextAndAnalyser,
   };
+}
+
+function loggerWarn(...args: any[]) {
+  if (typeof console !== 'undefined') console.warn(...args);
 }

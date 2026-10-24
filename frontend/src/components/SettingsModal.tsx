@@ -24,6 +24,8 @@ interface SettingsModalProps {
   settings: UserSettings;
   onSaveSettings: (settings: Partial<UserSettings>) => void;
   isDarkTheme: boolean;
+  themeChoice: 'light' | 'dark' | 'system';
+  onSelectTheme: (theme: 'light' | 'dark' | 'system') => void;
   onToggleTheme: () => void;
 }
 
@@ -33,6 +35,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   settings,
   onSaveSettings,
   isDarkTheme,
+  themeChoice,
+  onSelectTheme,
   onToggleTheme,
 }) => {
   const [localSettings, setLocalSettings] = useState<UserSettings>(settings);
@@ -468,38 +472,77 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 4: Theme & Preferences */}
           {activeTab === 'preferences' && (
             <div className="space-y-4">
-              {/* White vs Dark Theme Selection */}
+              {/* Light / Dark / System Theme Selection */}
               <div className="p-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-800/30 space-y-3">
                 <div>
-                  <h4 className="text-xs font-semibold">Appearance Theme</h4>
-                  <p className="text-[11px] text-gray-400">Choose between White (Light) and Dark Obsidian themes</p>
+                  <h4 className="text-xs font-semibold text-gray-900 dark:text-gray-100">Appearance Theme</h4>
+                  <p className="text-[11px] text-gray-400">Choose between Light, Dark, or automatic System theme</p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Light Theme */}
                   <button
+                    type="button"
                     onClick={() => {
-                      if (isDarkTheme) onToggleTheme();
+                      onSelectTheme('light');
+                      setLocalSettings(s => ({ ...s, theme: 'light' }));
                     }}
-                    className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-semibold transition ${
-                      !isDarkTheme
-                        ? 'border-blue-600 bg-white text-blue-600 ring-2 ring-blue-500 shadow-sm'
-                        : 'border-gray-300 dark:border-gray-700 text-gray-400 hover:text-white'
+                    className={`p-3.5 rounded-xl border flex flex-col items-center gap-2 text-center transition ${
+                      themeChoice === 'light'
+                        ? 'border-blue-600 bg-white dark:bg-[#121622] text-blue-600 dark:text-blue-400 ring-2 ring-blue-500 shadow-sm'
+                        : 'border-gray-200 dark:border-gray-800 bg-white/60 dark:bg-[#10141e]/60 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-700'
                     }`}
                   >
-                    <Sun className="w-4 h-4 text-amber-500" />
-                    <span>White / Light Theme</span>
+                    <div className="w-8 h-8 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-500 flex items-center justify-center">
+                      <Sun className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold">Light Theme</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">Creamy white surfaces</div>
+                    </div>
                   </button>
+
+                  {/* Dark Theme */}
                   <button
+                    type="button"
                     onClick={() => {
-                      if (!isDarkTheme) onToggleTheme();
+                      onSelectTheme('dark');
+                      setLocalSettings(s => ({ ...s, theme: 'dark' }));
                     }}
-                    className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-semibold transition ${
-                      isDarkTheme
-                        ? 'border-blue-600 bg-[#0d1117] text-blue-400 ring-2 ring-blue-500 shadow-sm'
-                        : 'border-gray-200 text-gray-600 hover:text-gray-900'
+                    className={`p-3.5 rounded-xl border flex flex-col items-center gap-2 text-center transition ${
+                      themeChoice === 'dark'
+                        ? 'border-blue-600 bg-white dark:bg-[#121622] text-blue-600 dark:text-blue-400 ring-2 ring-blue-500 shadow-sm'
+                        : 'border-gray-200 dark:border-gray-800 bg-white/60 dark:bg-[#10141e]/60 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-700'
                     }`}
                   >
-                    <Moon className="w-4 h-4 text-indigo-400" />
-                    <span>Dark Theme</span>
+                    <div className="w-8 h-8 rounded-full bg-indigo-50 dark:bg-indigo-950/40 text-indigo-400 flex items-center justify-center">
+                      <Moon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold">Dark Theme</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">Charcoal near-black</div>
+                    </div>
+                  </button>
+
+                  {/* System Theme */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectTheme('system');
+                      setLocalSettings(s => ({ ...s, theme: 'system' }));
+                    }}
+                    className={`p-3.5 rounded-xl border flex flex-col items-center gap-2 text-center transition ${
+                      themeChoice === 'system'
+                        ? 'border-blue-600 bg-white dark:bg-[#121622] text-blue-600 dark:text-blue-400 ring-2 ring-blue-500 shadow-sm'
+                        : 'border-gray-200 dark:border-gray-800 bg-white/60 dark:bg-[#10141e]/60 text-gray-600 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-700'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 flex items-center justify-center">
+                      <Laptop className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-semibold">System Default</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">Follows OS theme</div>
+                    </div>
                   </button>
                 </div>
               </div>

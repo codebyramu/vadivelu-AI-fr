@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mic, MicOff, Pause, Square, Settings as SettingsIcon, Subtitles, PhoneOff, ChevronDown } from 'lucide-react';
+import { Mic, MicOff, Pause, Square, Settings as SettingsIcon, Subtitles, PhoneOff, ChevronDown, ArrowLeft } from 'lucide-react';
 import { SonicWaveformVisualizer } from './SonicWaveformVisualizer';
 import { ActiveMemeInfo, PlaybackStatus } from '../hooks/useAudioPerformance';
 import { Message } from '../types';
@@ -42,41 +42,30 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
     statusText = '• Speaking...';
   } else if (playbackStatus === 'preparing') {
     visualizerState = 'processing';
-    statusText = '• Processing...';
+    statusText = '• Preparing audio…';
   } else if (isListening) {
     visualizerState = 'listening';
     statusText = '• Listening...';
   }
 
-  // Active meme card info (fallback to demo if none active)
-  const displayMeme = activeMeme || (playbackStatus === 'playing_meme' ? {
-    memeId: 'adengappa',
-    title: 'Adengappa',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=60',
-  } : null);
+  // Active meme card info (only display when real meme is playing)
+  const displayMeme = activeMeme;
 
   return (
     <div className="relative w-full h-screen max-h-screen bg-[#07090e] starry-bg text-white flex flex-col justify-between overflow-hidden select-none">
-      {/* macOS Top Bar */}
+      {/* Top Bar (Clean minimal desktop style, no colored dots) */}
       <div className="h-14 px-6 flex items-center justify-between z-20 shrink-0 border-b border-gray-800/40 backdrop-blur-sm">
-        {/* Left: macOS dots & title */}
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="w-3 h-3 rounded-full bg-[#ff5f56] hover:brightness-110 active:brightness-90 transition shadow-inner"
-              title="Close window"
-            />
-            <button
-              className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:brightness-110 transition shadow-inner"
-              title="Minimize"
-            />
-            <button
-              className="w-3 h-3 rounded-full bg-[#27c93f] hover:brightness-110 transition shadow-inner"
-              title="Full screen"
-            />
-          </div>
-          <span className="text-sm font-medium text-gray-200 tracking-wide">
+        {/* Left: Back button & title */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/5 hover:bg-white/10 active:scale-95 text-gray-300 hover:text-white border border-gray-700/50 text-xs font-medium transition shadow-sm"
+            title="Return to Chat"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Back to Chat</span>
+          </button>
+          <span className="text-xs font-semibold text-gray-300 tracking-wide">
             AI Voice Chat
           </span>
         </div>
@@ -108,11 +97,12 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
             analyserNode={analyserNode}
             isActive={isListening || playbackStatus !== 'idle'}
             state={visualizerState}
+            isDarkTheme={true}
           />
         </div>
 
         {/* Status Indicator */}
-        <div className="flex items-center justify-center gap-2 text-sm font-medium text-[#60a5fa] mt-1 tracking-wide animate-pulse-subtle">
+        <div className="flex items-center justify-center gap-2 text-sm font-medium text-zinc-200 mt-1 tracking-wide animate-pulse-subtle">
           <span>{statusText}</span>
         </div>
 

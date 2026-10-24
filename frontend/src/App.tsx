@@ -20,9 +20,45 @@ export const App: React.FC = () => {
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
-  // Settings & Theme
+  // Theme State & System Preference Tracking
+  const [themeChoice, setThemeChoice] = useState<'light' | 'dark' | 'system'>(() => {
+    const saved = localStorage.getItem('vadivelu_theme') as 'light' | 'dark' | 'system' | null;
+    return saved || 'system';
+  });
+
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => {
+      setSystemPrefersDark(e.matches);
+    };
+    mediaQuery.addEventListener('change', handler);
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  const isDark = themeChoice === 'system' ? systemPrefersDark : themeChoice === 'dark';
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) {
+      root.classList.add('dark');
+      root.setAttribute('data-theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      root.setAttribute('data-theme', 'light');
+    }
+    localStorage.setItem('vadivelu_theme', themeChoice);
+  }, [isDark, themeChoice]);
+
+  // Settings
   const [settings, setSettings] = useState<UserSettings>(() => {
-    const savedTheme = (localStorage.getItem('vadivelu_theme') as 'light' | 'dark') || 'light';
     return {
       geminiModel: 'gemini-2.5-flash',
       voiceGender: 'female',
@@ -36,21 +72,10 @@ export const App: React.FC = () => {
       defaultPersonality: 'normal',
       memoryEnabled: true,
       autoSaveMemory: true,
-      theme: savedTheme,
+      theme: (localStorage.getItem('vadivelu_theme') as any) || 'system',
       audioRetentionDays: 7,
     };
   });
-
-  const isDark = settings.theme === 'dark';
-
-  useEffect(() => {
-    if (isDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('vadivelu_theme', settings.theme);
-  }, [isDark, settings.theme]);
 
   // Conversations & Messages
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -291,15 +316,24 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Theme toggle
+  // Theme toggle and selector
+  const handleSelectTheme = useCallback((newTheme: 'light' | 'dark' | 'system') => {
+    setThemeChoice(newTheme);
+    setSettings(prev => ({ ...prev, theme: newTheme }));
+    api.saveSettings({ theme: newTheme }).catch(() => {});
+  }, []);
+
   const handleToggleTheme = useCallback(() => {
-    const nextTheme = isDark ? 'light' : 'dark';
-    setSettings(prev => ({ ...prev, theme: nextTheme }));
-    api.saveSettings({ theme: nextTheme }).catch(() => {});
-  }, [isDark]);
+    const cycleMap: Record<'light' | 'dark' | 'system', 'light' | 'dark' | 'system'> = {
+      system: isDark ? 'light' : 'dark',
+      light: 'dark',
+      dark: 'light',
+    };
+    handleSelectTheme(cycleMap[themeChoice]);
+  }, [themeChoice, isDark, handleSelectTheme]);
 
   return (
-    <div className={`w-screen h-screen overflow-hidden ${isDark ? 'dark bg-[#0b0e14] text-white' : 'bg-gray-100 text-slate-900'}`}>
+    <div className={`w-screen h-screen overflow-hidden ${isDark ? 'dark bg-[#080a0f] text-zinc-100' : 'bg-[#fbfbfa] text-zinc-900'} transition-colors duration-200`}>
       {/* Immersive Fullscreen Voice Mode View */}
       {isVoiceMode ? (
         <VoiceModeView
@@ -344,6 +378,8 @@ export const App: React.FC = () => {
           onStartPushToTalk={() => speechRecognition.startListening()}
           onStopPushToTalk={() => speechRecognition.stopListening()}
           isListening={speechRecognition.isListening}
+          themeChoice={themeChoice}
+          onToggleTheme={handleToggleTheme}
         />
       )}
 
@@ -434,6 +470,8 @@ export const App: React.FC = () => {
           api.saveSettings(updates).catch(() => {});
         }}
         isDarkTheme={isDark}
+        themeChoice={themeChoice}
+        onSelectTheme={handleSelectTheme}
         onToggleTheme={handleToggleTheme}
       />
     </div>

@@ -2,12 +2,10 @@ import React from 'react';
 import {
   Mic,
   MicOff,
-  Square,
-  Maximize2,
   X,
-  Volume2,
+  VolumeX,
+  Maximize2,
   Sparkles,
-  AlertCircle,
 } from 'lucide-react';
 import { SonicWaveformVisualizer } from './SonicWaveformVisualizer';
 import { ActiveMemeInfo, PlaybackStatus } from '../hooks/useAudioPerformance';
@@ -15,7 +13,7 @@ import { ActiveMemeInfo, PlaybackStatus } from '../hooks/useAudioPerformance';
 interface MiniVoiceWidgetProps {
   isOpen: boolean;
   onClose: () => void;
-  onExpandFullscreen: () => void;
+  onExpandFullscreen?: () => void;
   isListening: boolean;
   onToggleListening: () => void;
   onInterrupt: () => void;
@@ -41,193 +39,129 @@ export const MiniVoiceWidget: React.FC<MiniVoiceWidgetProps> = ({
   transcript = '',
   interimTranscript = '',
   isDarkTheme,
-  voiceGender = 'female',
 }) => {
   if (!isOpen) return null;
 
   // Determine visualizer state & status label
   let visualizerState: 'listening' | 'speaking' | 'processing' | 'idle' = 'idle';
-  let statusText = 'Voice Ready';
-  let statusColor = 'text-blue-500';
+  let statusText = '• Ready';
+  let statusColor = isDarkTheme ? 'text-zinc-300' : 'text-zinc-600';
 
   if (playbackStatus === 'playing_speech' || playbackStatus === 'playing_meme') {
     visualizerState = 'speaking';
-    statusText = 'Speaking...';
-    statusColor = 'text-cyan-400';
+    statusText = '• Speaking...';
+    statusColor = isDarkTheme ? 'text-zinc-100 font-semibold' : 'text-zinc-900 font-semibold';
   } else if (playbackStatus === 'preparing') {
     visualizerState = 'processing';
-    statusText = 'Thinking...';
-    statusColor = 'text-amber-400';
+    statusText = '• Preparing audio…';
+    statusColor = 'text-amber-500 font-medium';
   } else if (isListening) {
     visualizerState = 'listening';
-    statusText = 'Listening actively...';
-    statusColor = 'text-emerald-400';
+    statusText = '• Listening actively...';
+    statusColor = isDarkTheme ? 'text-emerald-400 font-medium' : 'text-emerald-600 font-medium';
+  } else {
+    statusText = '• Microphone muted';
+    statusColor = isDarkTheme ? 'text-zinc-400' : 'text-zinc-500';
   }
 
   const liveText = interimTranscript || transcript;
+  const isPlayingAudio = playbackStatus === 'playing_speech' || playbackStatus === 'playing_meme';
 
   return (
     <div
-      className={`fixed bottom-5 right-5 z-50 w-84 sm:w-92 rounded-2xl shadow-2xl transition-all duration-300 overflow-hidden border backdrop-blur-2xl ${
-        isDarkTheme
-          ? 'bg-[#0a0d14]/92 border-slate-700/60 text-white shadow-cyan-950/30'
-          : 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-300/60'
-      }`}
-      style={{ minWidth: '320px', maxWidth: '380px' }}
+      className="fixed bottom-24 right-8 z-40 flex flex-col items-center pointer-events-auto select-none bg-transparent animate-in fade-in zoom-in-95 duration-200"
+      style={{ width: '220px' }}
     >
-      {/* Top Header */}
-      <div
-        className={`px-3.5 py-2.5 flex items-center justify-between border-b ${
-          isDarkTheme ? 'border-slate-800/80 bg-slate-900/40' : 'border-slate-100 bg-slate-50/70'
-        }`}
-      >
-        <div className="flex items-center gap-2">
-          <span className="relative flex h-2.5 w-2.5">
-            <span
-              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                isListening ? 'bg-emerald-400' : 'bg-blue-400'
-              }`}
-            ></span>
-            <span
-              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-                isListening ? 'bg-emerald-500' : 'bg-blue-500'
-              }`}
-            ></span>
-          </span>
-          <span className="text-xs font-semibold tracking-wide">Live Voice Chat</span>
-          <span
-            className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-              isDarkTheme ? 'bg-slate-800 text-slate-300' : 'bg-slate-200/70 text-slate-600'
-            }`}
-          >
-            {voiceGender === 'female' ? 'Female Voice' : 'Male Voice'}
+      {/* Dynamic Meme Reaction Badge (if active meme is playing) */}
+      {activeMeme && (
+        <div className="mb-1 flex items-center gap-1.5 px-3 py-1 rounded-full text-xs backdrop-blur-md border shadow-sm transition animate-in fade-in zoom-in-90 duration-150 bg-white/80 dark:bg-zinc-900/80 border-black/10 dark:border-white/10 text-zinc-800 dark:text-zinc-100">
+          {activeMeme.thumbnailUrl ? (
+            <img
+              src={activeMeme.thumbnailUrl}
+              alt="meme"
+              className="w-4 h-4 rounded-full object-cover border border-black/10 dark:border-white/20"
+            />
+          ) : (
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+          )}
+          <span className="font-medium text-[11px] truncate max-w-[140px]">
+            {activeMeme.title || activeMeme.memeId}
           </span>
         </div>
+      )}
 
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onExpandFullscreen}
-            title="Expand to Fullscreen Voice Mode"
-            className={`p-1.5 rounded-lg transition-colors ${
-              isDarkTheme
-                ? 'hover:bg-slate-800 text-slate-400 hover:text-white'
-                : 'hover:bg-slate-200/60 text-slate-500 hover:text-slate-800'
-            }`}
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={onClose}
-            title="End Voice Chat"
-            className={`p-1.5 rounded-lg transition-colors ${
-              isDarkTheme
-                ? 'hover:bg-red-500/20 text-slate-400 hover:text-red-400'
-                : 'hover:bg-red-100 text-slate-500 hover:text-red-600'
-            }`}
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Visualizer Canvas Area */}
-      <div className="relative h-40 w-full flex items-center justify-center overflow-hidden">
+      {/* Floating Sonic Waveform (No rectangular box, 100% transparent background) */}
+      <div className="relative w-44 h-44 flex items-center justify-center">
         <SonicWaveformVisualizer
           analyserNode={analyserNode}
           isActive={isListening || playbackStatus !== 'idle'}
           state={visualizerState}
+          isDarkTheme={isDarkTheme}
           className="w-full h-full"
         />
-
-        {/* Dynamic Meme Reaction Badge */}
-        {activeMeme && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1 rounded-full bg-black/75 border border-cyan-500/40 text-cyan-200 text-xs shadow-lg animate-in fade-in zoom-in-95 duration-200">
-            {activeMeme.thumbnailUrl ? (
-              <img
-                src={activeMeme.thumbnailUrl}
-                alt="meme"
-                className="w-4 h-4 rounded-full object-cover border border-cyan-400/50"
-              />
-            ) : (
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-            )}
-            <span className="font-medium truncate max-w-[170px]">
-              Playing {activeMeme.title || activeMeme.memeId} meme
-            </span>
-          </div>
-        )}
-
-        {/* Status text */}
-        <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/40 backdrop-blur-md text-[11px] font-medium border border-white/5">
-          <span className={statusColor}>{statusText}</span>
-        </div>
       </div>
 
-      {/* Speech transcription preview */}
+      {/* Unobtrusive Status Label */}
+      <div className={`text-[11px] tracking-wide mt-0.5 text-center transition-colors drop-shadow-xs ${statusColor}`}>
+        {statusText}
+      </div>
+
+      {/* Speech transcription snippet (if speaking) */}
       {liveText && (
-        <div
-          className={`px-3 py-1.5 text-xs truncate text-center border-t border-b ${
-            isDarkTheme
-              ? 'bg-slate-900/50 border-slate-800 text-slate-300 italic'
-              : 'bg-slate-50 border-slate-100 text-slate-600 italic'
-          }`}
-        >
+        <div className="text-[10px] italic max-w-[190px] truncate text-center text-zinc-500 dark:text-zinc-400 mt-0.5">
           "{liveText}"
         </div>
       )}
 
-      {/* Bottom Control Bar */}
-      <div
-        className={`px-3.5 py-2.5 flex items-center justify-between gap-2 border-t ${
-          isDarkTheme ? 'border-slate-800/80 bg-slate-900/30' : 'border-slate-100 bg-slate-50/50'
-        }`}
-      >
+      {/* Minimal Floating Action Controls */}
+      <div className="flex items-center gap-2 mt-2.5">
+        {/* Mic Mute / Unmute */}
         <button
           onClick={onToggleListening}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all backdrop-blur-md shadow-xs active:scale-95 ${
             isListening
-              ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/20'
-              : isDarkTheme
-              ? 'bg-slate-800 hover:bg-slate-700 text-slate-200'
-              : 'bg-slate-200 hover:bg-slate-300 text-slate-700'
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-500/30'
+              : 'bg-zinc-200/80 dark:bg-zinc-800/80 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 border border-black/5 dark:border-white/10'
           }`}
+          title={isListening ? 'Mute microphone' : 'Unmute microphone'}
         >
           {isListening ? (
-            <>
-              <Mic className="w-3.5 h-3.5 animate-pulse" />
-              <span>Listening</span>
-            </>
+            <Mic className="w-3.5 h-3.5" />
           ) : (
-            <>
-              <MicOff className="w-3.5 h-3.5 text-slate-400" />
-              <span>Muted</span>
-            </>
+            <MicOff className="w-3.5 h-3.5 text-zinc-400" />
           )}
         </button>
 
-        <div className="flex items-center gap-1.5">
-          {(playbackStatus === 'playing_speech' || playbackStatus === 'playing_meme') && (
-            <button
-              onClick={onInterrupt}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 transition-colors"
-            >
-              <Volume2 className="w-3.5 h-3.5" />
-              <span>Interrupt</span>
-            </button>
-          )}
-
+        {/* Interrupt button (if audio is currently playing) */}
+        {isPlayingAudio && (
           <button
-            onClick={onClose}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors ${
-              isDarkTheme
-                ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30'
-                : 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200'
-            }`}
+            onClick={onInterrupt}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-amber-500/90 hover:bg-amber-600 text-white backdrop-blur-md shadow-xs active:scale-95 transition"
+            title="Interrupt voice playback"
           >
-            <Square className="w-3 h-3 fill-current" />
-            <span>Stop</span>
+            <VolumeX className="w-3.5 h-3.5" />
           </button>
-        </div>
+        )}
+
+        {/* Fullscreen Expand (Optional) */}
+        {onExpandFullscreen && (
+          <button
+            onClick={onExpandFullscreen}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-zinc-200/80 dark:bg-zinc-800/80 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-300 backdrop-blur-md border border-black/5 dark:border-white/10 active:scale-95 transition"
+            title="Expand to Fullscreen Voice Mode"
+          >
+            <Maximize2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {/* Stop / Close Live Voice */}
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-full flex items-center justify-center bg-zinc-200/80 dark:bg-zinc-800/80 hover:bg-red-500 hover:text-white text-zinc-600 dark:text-zinc-300 backdrop-blur-md border border-black/5 dark:border-white/10 active:scale-95 transition"
+          title="Stop voice chat"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
       </div>
     </div>
   );

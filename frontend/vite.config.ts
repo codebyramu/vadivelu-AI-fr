@@ -19,6 +19,14 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
       },
+      '/memes': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+      '/cache': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
     },
   },
 });

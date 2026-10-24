@@ -4,6 +4,7 @@ interface SonicWaveformVisualizerProps {
   analyserNode?: AnalyserNode | null;
   isActive?: boolean;
   state?: 'listening' | 'speaking' | 'processing' | 'idle';
+  isDarkTheme?: boolean;
   className?: string;
 }
 
@@ -11,6 +12,7 @@ export const SonicWaveformVisualizer: React.FC<SonicWaveformVisualizerProps> = (
   analyserNode,
   isActive = false,
   state = 'idle',
+  isDarkTheme = true,
   className = '',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -26,14 +28,13 @@ export const SonicWaveformVisualizer: React.FC<SonicWaveformVisualizerProps> = (
     const dataArray = analyserNode ? new Uint8Array(analyserNode.frequencyBinCount) : null;
 
     const render = () => {
-      time += 0.04;
+      time += 0.035;
 
-      // Handle retina displays
       const width = canvas.width;
       const height = canvas.height;
       const centerX = width / 2;
       const centerY = height / 2;
-      const baseRadius = Math.min(width, height) * 0.28;
+      const baseRadius = Math.min(width, height) * 0.27;
 
       ctx.clearRect(0, 0, width, height);
 
@@ -51,96 +52,104 @@ export const SonicWaveformVisualizer: React.FC<SonicWaveformVisualizerProps> = (
       // If active without direct audio analyser, simulate gentle or active pulse
       if (isActive && audioPower === 0) {
         if (state === 'speaking') {
-          audioPower = 0.35 + Math.sin(time * 3) * 0.2 + Math.cos(time * 7) * 0.15;
+          audioPower = 0.32 + Math.sin(time * 3) * 0.18 + Math.cos(time * 6) * 0.12;
         } else if (state === 'listening') {
-          audioPower = 0.2 + Math.sin(time * 2) * 0.1;
+          audioPower = 0.18 + Math.sin(time * 2.2) * 0.08;
         } else if (state === 'processing') {
-          audioPower = 0.25 + Math.sin(time * 5) * 0.15;
+          audioPower = 0.24 + Math.sin(time * 4) * 0.12;
         }
       }
 
-      const pulseFactor = Math.max(0, Math.min(1.5, audioPower));
+      const pulseFactor = Math.max(0, Math.min(1.4, audioPower));
+
+      // Color tokens:
+      // Dark mode: creamy warm off-white waves with subtle warm glow
+      // Light mode: subtle dark charcoal / graphite waves with restrained shadow
+      const ringColorBase = isDarkTheme ? '248, 245, 238' : '45, 52, 64';
+      const shadowColor = isDarkTheme ? 'rgba(255, 250, 240, 0.35)' : 'rgba(30, 36, 48, 0.2)';
+      const coreStrokeColor = isDarkTheme ? 'rgba(252, 249, 242, 0.88)' : 'rgba(35, 42, 54, 0.82)';
+      const coreAuraColor = isDarkTheme ? 'rgba(255, 252, 245, 0.05)' : 'rgba(30, 36, 48, 0.03)';
+      const spikeColorBase = isDarkTheme ? '252, 250, 246' : '32, 38, 48';
+      const centerLineStroke = isDarkTheme ? 'rgba(255, 255, 255, 0.85)' : 'rgba(25, 30, 40, 0.75)';
 
       // 1. Draw concentric ripples (background rings)
-      const ringCount = 14;
-      const maxRadius = Math.min(width, height) * 0.46;
+      const ringCount = 12;
+      const maxRadius = Math.min(width, height) * 0.45;
       const radiusStep = (maxRadius - baseRadius * 0.5) / ringCount;
 
       for (let i = 0; i < ringCount; i++) {
-        const ringRadius = baseRadius * 0.6 + i * radiusStep + Math.sin(time + i * 0.4) * (2 + pulseFactor * 5);
+        const ringRadius = baseRadius * 0.6 + i * radiusStep + Math.sin(time + i * 0.4) * (1.5 + pulseFactor * 4);
         ctx.beginPath();
         ctx.arc(centerX, centerY, ringRadius, 0, Math.PI * 2);
 
-        // Alpha calculation: inner rings brighter, outer rings fade into deep blue
         const distFromCenter = i / ringCount;
-        let alpha = (1 - distFromCenter * 0.8) * 0.35;
+        let alpha = (1 - distFromCenter * 0.85) * (isDarkTheme ? 0.32 : 0.24);
         if (state === 'speaking' || state === 'listening') {
-          alpha += pulseFactor * 0.25;
+          alpha += pulseFactor * 0.2;
         }
 
-        ctx.strokeStyle = `rgba(56, 189, 248, ${Math.min(0.85, Math.max(0.08, alpha))})`;
-        ctx.lineWidth = i % 2 === 0 ? 1.5 : 1;
-        ctx.shadowColor = '#0ea5e9';
-        ctx.shadowBlur = i % 3 === 0 ? 8 + pulseFactor * 12 : 2;
+        ctx.strokeStyle = `rgba(${ringColorBase}, ${Math.min(0.75, Math.max(0.06, alpha))})`;
+        ctx.lineWidth = i % 2 === 0 ? 1.25 : 0.9;
+        ctx.shadowColor = shadowColor;
+        ctx.shadowBlur = i % 3 === 0 ? 6 + pulseFactor * 8 : 1.5;
         ctx.stroke();
       }
 
-      // 2. Draw prominent center glowing core circle
-      const coreRadius = baseRadius + Math.sin(time * 1.5) * 2 + pulseFactor * 8;
+      // 2. Draw center glowing core circle
+      const coreRadius = baseRadius + Math.sin(time * 1.5) * 1.8 + pulseFactor * 6;
       ctx.beginPath();
       ctx.arc(centerX, centerY, coreRadius, 0, Math.PI * 2);
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 2.5;
-      ctx.shadowColor = '#38bdf8';
-      ctx.shadowBlur = 18 + pulseFactor * 15;
+      ctx.strokeStyle = coreStrokeColor;
+      ctx.lineWidth = 2.0;
+      ctx.shadowColor = shadowColor;
+      ctx.shadowBlur = 10 + pulseFactor * 10;
       ctx.stroke();
 
       // Core inner ambient glow
       const grad = ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, coreRadius);
-      grad.addColorStop(0, 'rgba(14, 165, 233, 0.08)');
-      grad.addColorStop(0.7, 'rgba(14, 165, 233, 0.03)');
-      grad.addColorStop(1, 'rgba(14, 165, 233, 0)');
+      grad.addColorStop(0, coreAuraColor);
+      grad.addColorStop(0.7, 'rgba(0, 0, 0, 0)');
+      grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
       ctx.fillStyle = grad;
       ctx.fill();
 
       // 3. Draw horizontal sonic frequency waveform across the center
-      const wavePoints = 80;
-      const waveWidth = width * 0.82;
+      const wavePoints = 72;
+      const waveWidth = width * 0.78;
       const startX = (width - waveWidth) / 2;
       const stepX = waveWidth / wavePoints;
 
-      ctx.shadowColor = '#60a5fa';
-      ctx.shadowBlur = 12 + pulseFactor * 14;
+      ctx.shadowColor = shadowColor;
+      ctx.shadowBlur = 8 + pulseFactor * 8;
 
-      // Draw vertical waveform spikes (like in screenshot 1)
+      // Draw vertical waveform spikes
       for (let i = 0; i <= wavePoints; i++) {
         const x = startX + i * stepX;
-        const normDist = 1 - Math.abs((i - wavePoints / 2) / (wavePoints / 2)); // 0 at edges, 1 at center
-        const bellCurve = Math.pow(normDist, 2.2);
+        const normDist = 1 - Math.abs((i - wavePoints / 2) / (wavePoints / 2));
+        const bellCurve = Math.pow(normDist, 2.0);
 
-        let spikeHeight = 4;
+        let spikeHeight = 3;
         if (analyserNode && dataArray && dataArray.length > 0) {
           const freqIndex = Math.floor((i / wavePoints) * (dataArray.length * 0.6));
           const val = dataArray[freqIndex] / 255;
-          spikeHeight = val * 120 * bellCurve + 4;
+          spikeHeight = val * 90 * bellCurve + 3;
         } else {
           // Synthetic ambient wave
-          const wave1 = Math.sin(time * 2.5 + i * 0.2);
-          const wave2 = Math.cos(time * 1.8 + i * 0.35);
+          const wave1 = Math.sin(time * 2.2 + i * 0.22);
+          const wave2 = Math.cos(time * 1.6 + i * 0.32);
           const activeAmp = (state === 'speaking' || state === 'listening' || state === 'processing')
-            ? (25 + pulseFactor * 70)
-            : 12;
-          spikeHeight = Math.abs(wave1 * wave2) * activeAmp * bellCurve + 3;
+            ? (20 + pulseFactor * 55)
+            : 8;
+          spikeHeight = Math.abs(wave1 * wave2) * activeAmp * bellCurve + 2.5;
         }
 
-        // Draw vertical spike
         ctx.beginPath();
         ctx.moveTo(x, centerY - spikeHeight);
         ctx.lineTo(x, centerY + spikeHeight);
 
-        const spikeAlpha = 0.2 + bellCurve * 0.75 + pulseFactor * 0.2;
-        ctx.strokeStyle = `rgba(186, 230, 253, ${Math.min(1, spikeAlpha)})`;
-        ctx.lineWidth = 1.8;
+        const spikeAlpha = (isDarkTheme ? 0.25 : 0.2) + bellCurve * 0.65 + pulseFactor * 0.15;
+        ctx.strokeStyle = `rgba(${spikeColorBase}, ${Math.min(0.92, spikeAlpha)})`;
+        ctx.lineWidth = 1.6;
         ctx.stroke();
       }
 
@@ -151,13 +160,13 @@ export const SonicWaveformVisualizer: React.FC<SonicWaveformVisualizerProps> = (
         const x = startX + i * stepX;
         const normDist = 1 - Math.abs((i - wavePoints / 2) / (wavePoints / 2));
         const bellCurve = Math.pow(normDist, 1.8);
-        const yOffset = Math.sin(time * 3 + i * 0.25) * (4 + pulseFactor * 14) * bellCurve;
+        const yOffset = Math.sin(time * 2.8 + i * 0.25) * (3 + pulseFactor * 10) * bellCurve;
         ctx.lineTo(x, centerY + yOffset);
       }
-      ctx.strokeStyle = 'rgba(224, 242, 254, 0.9)';
-      ctx.lineWidth = 2;
-      ctx.shadowColor = '#38bdf8';
-      ctx.shadowBlur = 15;
+      ctx.strokeStyle = centerLineStroke;
+      ctx.lineWidth = 1.6;
+      ctx.shadowColor = shadowColor;
+      ctx.shadowBlur = 10;
       ctx.stroke();
 
       animationFrameRef.current = requestAnimationFrame(render);
@@ -170,15 +179,15 @@ export const SonicWaveformVisualizer: React.FC<SonicWaveformVisualizerProps> = (
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [analyserNode, isActive, state]);
+  }, [analyserNode, isActive, state, isDarkTheme]);
 
   return (
     <div className={`relative flex items-center justify-center ${className}`}>
       <canvas
         ref={canvasRef}
-        width={680}
-        height={680}
-        className="w-full max-w-[540px] aspect-square pointer-events-none select-none"
+        width={480}
+        height={480}
+        className="w-full h-full max-w-[340px] aspect-square pointer-events-none select-none"
       />
     </div>
   );
