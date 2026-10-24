@@ -1,5 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, Key, Volume2, Mic, UserCheck, Sparkles, Moon, Sun, ShieldCheck } from 'lucide-react';
+import {
+  X,
+  Settings,
+  Key,
+  Volume2,
+  Mic,
+  UserCheck,
+  Sparkles,
+  Moon,
+  Sun,
+  ShieldCheck,
+  Plus,
+  Check,
+  AlertCircle,
+  Laptop,
+} from 'lucide-react';
 import { UserSettings, PersonalityPreset, VoiceGender } from '../types';
 import { api, HealthStatus } from '../services/api';
 
@@ -24,15 +39,54 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [activeTab, setActiveTab] = useState<'personality' | 'voice' | 'gemini' | 'preferences'>('personality');
 
+  // API Keys Form state
+  const [keysInput, setKeysInput] = useState('');
+  const [isSavingKeys, setIsSavingKeys] = useState(false);
+  const [keySaveMessage, setKeySaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     setLocalSettings(settings);
   }, [settings]);
 
   useEffect(() => {
     if (isOpen) {
-      api.getHealth().then(setHealthStatus).catch(() => {});
+      loadHealth();
     }
   }, [isOpen]);
+
+  const loadHealth = async () => {
+    try {
+      const data = await api.getHealth();
+      setHealthStatus(data);
+    } catch (e) {
+      console.warn('Failed to load health:', e);
+    }
+  };
+
+  const handleSaveKeys = async () => {
+    const rawKeys = keysInput
+      .split('\n')
+      .map(k => k.trim())
+      .filter(k => k.length > 0 && !k.startsWith('#'));
+
+    if (rawKeys.length === 0) {
+      setKeySaveMessage({ type: 'error', text: 'Please enter at least one valid Gemini API key.' });
+      return;
+    }
+
+    setIsSavingKeys(true);
+    setKeySaveMessage(null);
+    try {
+      const res = await api.saveGeminiKeys(rawKeys);
+      setKeySaveMessage({ type: 'success', text: `Saved ${rawKeys.length} Gemini API keys successfully!` });
+      setKeysInput('');
+      await loadHealth();
+    } catch (err: any) {
+      setKeySaveMessage({ type: 'error', text: err.message || 'Failed to save API keys.' });
+    } finally {
+      setIsSavingKeys(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -46,12 +100,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const updated = { ...localSettings, voiceGender: gender };
     setLocalSettings(updated);
     onSaveSettings({ voiceGender: gender });
-  };
-
-  const handleMemeFrequencySelect = (freq: 'low' | 'normal' | 'high') => {
-    const updated = { ...localSettings, memeFrequency: freq };
-    setLocalSettings(updated);
-    onSaveSettings({ memeFrequency: freq });
   };
 
   const handleVoiceModeSelect = (mode: 'push_to_talk' | 'continuous') => {
@@ -99,132 +147,107 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     },
   ];
 
+  const totalKeys = healthStatus?.keyRotation?.totalKeys ?? 0;
+  const activeKeys = healthStatus?.keyRotation?.activeKeysCount ?? 0;
+  const configuredKeys = healthStatus?.keyRotation?.keys || [];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150">
-      <div 
-        className="w-full max-w-2xl bg-white dark:bg-[#161b22] border border-gray-200 dark:border-gray-800 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] text-gray-900 dark:text-gray-100"
-        onClick={e => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-white dark:bg-[#161b22] border border-gray-200 dark:border-gray-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200 dark:border-gray-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-blue-100 dark:bg-blue-950/70 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <Settings className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold">Settings & Configuration</h2>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Customize Gemini intelligence, personality presets, and voice audio
-              </p>
-            </div>
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <Settings className="w-5 h-5 text-gray-500" />
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Settings & Preferences</h2>
           </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition"
+            className="p-1.5 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center px-6 border-b border-gray-200 dark:border-gray-800 gap-6 text-xs font-semibold">
+        {/* Navigation Tabs */}
+        <div className="flex px-6 border-b border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#12161f] text-xs font-medium">
           <button
             onClick={() => setActiveTab('personality')}
-            className={`py-3 border-b-2 transition ${
+            className={`px-4 py-3 border-b-2 font-semibold transition ${
               activeTab === 'personality'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
             Personality Presets
           </button>
           <button
             onClick={() => setActiveTab('voice')}
-            className={`py-3 border-b-2 transition ${
+            className={`px-4 py-3 border-b-2 font-semibold transition ${
               activeTab === 'voice'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
             Voice & Audio
           </button>
           <button
             onClick={() => setActiveTab('gemini')}
-            className={`py-3 border-b-2 transition ${
+            className={`px-4 py-3 border-b-2 font-semibold flex items-center gap-1.5 transition ${
               activeTab === 'gemini'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
-            Gemini Rotator Status
+            <span>Gemini API Keys</span>
+            <span
+              className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                activeKeys > 0 ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-600' : 'bg-amber-100 dark:bg-amber-950 text-amber-600'
+              }`}
+            >
+              {activeKeys} active
+            </span>
           </button>
           <button
             onClick={() => setActiveTab('preferences')}
-            className={`py-3 border-b-2 transition ${
+            className={`px-4 py-3 border-b-2 font-semibold transition ${
               activeTab === 'preferences'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
-                : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-200'
             }`}
           >
-            Theme & Options
+            Theme & Preferences
           </button>
         </div>
 
-        {/* Tab Body */}
-        <div className="overflow-y-auto p-6 space-y-6 flex-1">
+        {/* Tab Content */}
+        <div className="p-6 overflow-y-auto flex-1 space-y-6">
           {/* TAB 1: Personality */}
           {activeTab === 'personality' && (
             <div className="space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                Choose AI Persona
-              </h3>
-              <div className="grid grid-cols-2 gap-3">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Choose the default conversational personality for new voice chats. You can also override this per conversation.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {personalityPresets.map(preset => {
                   const isSelected = localSettings.defaultPersonality === preset.id;
                   return (
-                    <button
+                    <div
                       key={preset.id}
                       onClick={() => handlePresetSelect(preset.id)}
-                      className={`p-4 rounded-2xl text-left border transition flex flex-col justify-between ${
+                      className={`p-4 rounded-2xl border text-left cursor-pointer transition relative ${
                         isSelected
-                          ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30 ring-1 ring-blue-500'
-                          : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 bg-gray-50/40 dark:bg-gray-800/20'
+                          ? 'border-blue-600 bg-blue-50/70 dark:bg-blue-950/40 text-blue-900 dark:text-blue-100 ring-2 ring-blue-500'
+                          : 'border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 bg-white dark:bg-[#12161f]'
                       }`}
                     >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-xl">{preset.emoji}</span>
-                        <span className="text-sm font-semibold">{preset.title}</span>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-lg">{preset.emoji}</span>
+                        <h4 className="text-xs font-semibold text-gray-900 dark:text-gray-100">{preset.title}</h4>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                        {preset.desc}
-                      </p>
-                    </button>
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed">{preset.desc}</p>
+                    </div>
                   );
                 })}
-              </div>
-
-              {/* Meme Frequency */}
-              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 space-y-2">
-                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  Meme Reaction Frequency
-                </label>
-                <div className="grid grid-cols-3 gap-3">
-                  {(['low', 'normal', 'high'] as const).map(freq => (
-                    <button
-                      key={freq}
-                      onClick={() => handleMemeFrequencySelect(freq)}
-                      className={`py-2 px-3 rounded-xl text-xs font-medium capitalize border transition ${
-                        localSettings.memeFrequency === freq
-                          ? 'border-blue-600 bg-blue-600 text-white'
-                          : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      {freq === 'low' && 'Subtle (Low)'}
-                      {freq === 'normal' && 'Standard (Balanced)'}
-                      {freq === 'high' && 'Vibrant (High)'}
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
           )}
@@ -232,7 +255,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 2: Voice & Audio */}
           {activeTab === 'voice' && (
             <div className="space-y-5">
-              {/* Voice Gender */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
                   Assistant Voice Tone
@@ -255,7 +277,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* Voice Input Mode */}
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
                   Voice Input Interaction Mode
@@ -270,7 +291,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                     }`}
                   >
                     <div className="font-semibold text-xs mb-1">Continuous Mode (Hands-free)</div>
-                    <p className="text-[11px] text-gray-400">Speaks and listens automatically with silence detection</p>
+                    <p className="text-[11px] text-gray-400">Speaks and listens automatically with turn detection</p>
                   </button>
                   <button
                     onClick={() => handleVoiceModeSelect('push_to_talk')}
@@ -286,11 +307,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
               </div>
 
-              {/* Volume Sliders */}
               <div className="space-y-4 pt-3 border-t border-gray-100 dark:border-gray-800">
                 <div>
                   <div className="flex justify-between text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
-                    <span>Speech Volume</span>
+                    <span>Speech Output Volume</span>
                     <span>{Math.round(localSettings.volume * 100)}%</span>
                   </div>
                   <input
@@ -331,50 +351,116 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: Gemini Status */}
+          {/* TAB 3: Gemini API Keys */}
           {activeTab === 'gemini' && (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <div className="p-4 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <ShieldCheck className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  <ShieldCheck className="w-6 h-6 text-blue-600 dark:text-blue-400 shrink-0" />
                   <div>
                     <h4 className="text-xs font-semibold text-blue-900 dark:text-blue-200">
-                      Multi-Key Intelligent Rotator Active
+                      Intelligent Round-Robin Rotator Active
                     </h4>
                     <p className="text-[11px] text-blue-700 dark:text-blue-400 mt-0.5">
-                      Distributes requests round-robin across Gemini 2.5 Flash keys with quota failover.
+                      Rotates requests across configured Gemini keys with quota failover and cooldown recovery.
                     </p>
                   </div>
                 </div>
-                <span className="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400">
-                  {healthStatus?.status || 'HEALTHY'}
+                <span
+                  className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider shrink-0 ${
+                    activeKeys > 0
+                      ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-400'
+                      : 'bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400'
+                  }`}
+                >
+                  {activeKeys > 0 ? `${activeKeys} READY` : 'KEYS NEEDED'}
                 </span>
               </div>
 
+              {/* Add / Update Keys Form */}
+              <div className="p-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/20 space-y-3">
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-200">
+                  Configure Gemini API Keys
+                </label>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  Paste your Gemini API keys below (one key per line). They will be securely stored on the backend in your local <code className="px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono text-[10px]">.env</code> and rotated round-robin:
+                </p>
+                <textarea
+                  rows={3}
+                  value={keysInput}
+                  onChange={e => setKeysInput(e.target.value)}
+                  placeholder="AIzaSy...\nAIzaSy...\nAIzaSy..."
+                  className="w-full text-xs font-mono p-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0d1117] text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+
+                {keySaveMessage && (
+                  <div
+                    className={`text-xs px-3 py-2 rounded-xl flex items-center gap-2 ${
+                      keySaveMessage.type === 'success'
+                        ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                        : 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800'
+                    }`}
+                  >
+                    {keySaveMessage.type === 'success' ? <Check className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                    <span>{keySaveMessage.text}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveKeys}
+                    disabled={isSavingKeys || !keysInput.trim()}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold rounded-xl shadow-xs transition"
+                  >
+                    {isSavingKeys ? 'Saving...' : 'Save & Rotate Keys'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Configured Keys List */}
               <div className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                  Active Keys Pool ({healthStatus?.totalKeys ?? 2} Configured)
+                  Configured Keys Pool ({totalKeys})
                 </h4>
-                {(healthStatus?.keysStatus || [
-                  { alias: 'Key-1 (Gemini 2.5 Flash)', status: 'healthy', consecutiveFailures: 0 },
-                  { alias: 'Key-2 (Gemini 1.5 Flash)', status: 'healthy', consecutiveFailures: 0 },
-                ]).map((k, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/30"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Key className="w-4 h-4 text-gray-400" />
-                      <span className="text-xs font-medium">{k.alias}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase">
-                        {k.status}
-                      </span>
-                    </div>
+                {configuredKeys.length === 0 ? (
+                  <div className="p-4 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 text-center text-xs text-gray-500">
+                    No keys currently in the rotation pool. Paste your keys above or edit <code className="font-mono">.env</code>.
                   </div>
-                ))}
+                ) : (
+                  configuredKeys.map((k, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between p-3 rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-800/30"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Key className="w-4 h-4 text-gray-400" />
+                        <span className="text-xs font-medium">{k.alias}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            k.status === 'healthy'
+                              ? 'bg-emerald-500 animate-pulse'
+                              : k.status === 'cooldown'
+                              ? 'bg-amber-500'
+                              : 'bg-red-500'
+                          }`}
+                        ></span>
+                        <span
+                          className={`text-[11px] font-semibold uppercase ${
+                            k.status === 'healthy'
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : k.status === 'cooldown'
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-red-600 dark:text-red-400'
+                          }`}
+                        >
+                          {k.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
@@ -382,18 +468,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {/* TAB 4: Theme & Preferences */}
           {activeTab === 'preferences' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-800/30">
+              {/* White vs Dark Theme Selection */}
+              <div className="p-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-800/30 space-y-3">
                 <div>
                   <h4 className="text-xs font-semibold">Appearance Theme</h4>
-                  <p className="text-[11px] text-gray-400">Toggle between Apple Light and Dark space themes</p>
+                  <p className="text-[11px] text-gray-400">Choose between White (Light) and Dark Obsidian themes</p>
                 </div>
-                <button
-                  onClick={onToggleTheme}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-xs font-medium transition"
-                >
-                  {isDarkTheme ? <Sun className="w-4 h-4 text-amber-500" /> : <Moon className="w-4 h-4 text-indigo-500" />}
-                  <span>{isDarkTheme ? 'Dark' : 'Light'}</span>
-                </button>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => {
+                      if (isDarkTheme) onToggleTheme();
+                    }}
+                    className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-semibold transition ${
+                      !isDarkTheme
+                        ? 'border-blue-600 bg-white text-blue-600 ring-2 ring-blue-500 shadow-sm'
+                        : 'border-gray-300 dark:border-gray-700 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    <Sun className="w-4 h-4 text-amber-500" />
+                    <span>White / Light Theme</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!isDarkTheme) onToggleTheme();
+                    }}
+                    className={`p-3 rounded-xl border flex items-center justify-center gap-2 text-xs font-semibold transition ${
+                      isDarkTheme
+                        ? 'border-blue-600 bg-[#0d1117] text-blue-400 ring-2 ring-blue-500 shadow-sm'
+                        : 'border-gray-200 text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <Moon className="w-4 h-4 text-indigo-400" />
+                    <span>Dark Theme</span>
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-2xl border border-gray-200 dark:border-gray-800 bg-gray-50/40 dark:bg-gray-800/30">

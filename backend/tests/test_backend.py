@@ -11,9 +11,11 @@ Covers:
 """
 
 import asyncio
+import json
 import os
 import time
 from typing import Generator
+from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
 
@@ -32,6 +34,7 @@ from app.core.key_rotator import (
 from app.db.database import db_service, init_db
 from app.main import app
 from app.models.schemas import SendMessageRequest
+from app.services.gemini_service import gemini_service
 from app.services.meme_service import meme_service
 from app.services.memory_service import memory_service
 from app.services.reaction_director import reaction_director
@@ -420,88 +423,136 @@ class TestReactionDirector:
 
     def test_celebration_rehearsal_performance(self):
         async def run():
-            conv = await db_service.create_conversation(title="Director Test")
-            plan, created_keys, key_alias = await reaction_director.plan_performance(
-                user_message="I won the championship competition!",
-                conversation_id=conv["id"],
-                history=[],
-                personality="high_energy",
-                force_rehearsal=True,
-            )
-            assert plan.emotion == "celebration"
-            assert len(plan.segments) >= 2
-            # Check segments ordering: speech and meme
-            segment_types = [s.type for s in plan.segments]
-            assert "speech" in segment_types
-            assert "meme" in segment_types
-            assert any(s.type == "meme" and s.meme_id == "kalakkunga" for s in plan.segments)
-            await db_service.delete_conversation(conv["id"])
+            mock_gemini_json = json.dumps({
+                "voice": "female",
+                "emotion": "celebration",
+                "reasoning": "User won competition, celebrating with kalakkunga",
+                "segments": [
+                    {"type": "speech", "text": "Incredible victory!"},
+                    {"type": "meme", "memeId": "kalakkunga"},
+                    {"type": "speech", "text": "You are a true champion!"}
+                ],
+                "newMemories": []
+            })
+            old_keys = key_rotator._keys
+            key_rotator._keys = [KeyInfo(alias="Key-1", secret="test_key_123")]
+            try:
+                with patch.object(gemini_service, "generate_content", return_value=(mock_gemini_json, "Key-1")):
+                    conv = await db_service.create_conversation(title="Director Test")
+                    plan, created_keys, key_alias = await reaction_director.plan_performance(
+                        user_message="I won the championship competition!",
+                        conversation_id=conv["id"],
+                        history=[],
+                        personality="high_energy",
+                    )
+                    assert plan.emotion == "celebration"
+                    assert len(plan.segments) >= 2
+                    segment_types = [s.type for s in plan.segments]
+                    assert "speech" in segment_types
+                    assert "meme" in segment_types
+                    assert any(s.type == "meme" and s.meme_id == "kalakkunga" for s in plan.segments)
+                    await db_service.delete_conversation(conv["id"])
+            finally:
+                key_rotator._keys = old_keys
 
         asyncio.run(run())
 
     def test_financial_irony_performance(self):
         async def run():
-            conv = await db_service.create_conversation(title="Finance Test")
-            plan, _, _ = await reaction_director.plan_performance(
-                user_message="I bought crypto and invested all my savings!",
-                conversation_id=conv["id"],
-                history=[],
-                personality="sarcastic",
-                force_rehearsal=True,
-            )
-            assert plan.emotion == "irony"
-            assert any(s.type == "meme" and s.meme_id == "stonks" for s in plan.segments)
-            await db_service.delete_conversation(conv["id"])
+            mock_gemini_json = json.dumps({
+                "voice": "male",
+                "emotion": "irony",
+                "reasoning": "Crypto investment risk, inserting stonks meme",
+                "segments": [
+                    {"type": "speech", "text": "Well well well, look at the wall street wolf!"},
+                    {"type": "meme", "memeId": "stonks"},
+                    {"type": "speech", "text": "Best of luck with your portfolio!"}
+                ],
+                "newMemories": []
+            })
+            old_keys = key_rotator._keys
+            key_rotator._keys = [KeyInfo(alias="Key-1", secret="test_key_123")]
+            try:
+                with patch.object(gemini_service, "generate_content", return_value=(mock_gemini_json, "Key-1")):
+                    conv = await db_service.create_conversation(title="Finance Test")
+                    plan, _, _ = await reaction_director.plan_performance(
+                        user_message="I bought crypto and invested all my savings!",
+                        conversation_id=conv["id"],
+                        history=[],
+                        personality="sarcastic",
+                    )
+                    assert plan.emotion == "irony"
+                    assert any(s.type == "meme" and s.meme_id == "stonks" for s in plan.segments)
+                    await db_service.delete_conversation(conv["id"])
+            finally:
+                key_rotator._keys = old_keys
 
         asyncio.run(run())
 
     def test_serious_distress_omits_memes(self):
         async def run():
-            conv = await db_service.create_conversation(title="Distress Test")
-            plan, _, _ = await reaction_director.plan_performance(
-                user_message="I am feeling deeply hurt and depressed today.",
-                conversation_id=conv["id"],
-                history=[],
-                personality="calm_supportive",
-                force_rehearsal=True,
-            )
-            # Memes MUST NOT be used for serious distress
-            assert all(s.type != "meme" for s in plan.segments)
-            assert plan.emotion == "calm"
-            await db_service.delete_conversation(conv["id"])
+            mock_gemini_json = json.dumps({
+                "voice": "female",
+                "emotion": "calm",
+                "reasoning": "Distress message, omitting all memes",
+                "segments": [
+                    {"type": "speech", "text": "I am truly sorry to hear that. I am here for you."}
+                ],
+                "newMemories": []
+            })
+            old_keys = key_rotator._keys
+            key_rotator._keys = [KeyInfo(alias="Key-1", secret="test_key_123")]
+            try:
+                with patch.object(gemini_service, "generate_content", return_value=(mock_gemini_json, "Key-1")):
+                    conv = await db_service.create_conversation(title="Distress Test")
+                    plan, _, _ = await reaction_director.plan_performance(
+                        user_message="I am feeling deeply hurt and depressed today.",
+                        conversation_id=conv["id"],
+                        history=[],
+                        personality="calm_supportive",
+                    )
+                    assert all(s.type != "meme" for s in plan.segments)
+                    assert plan.emotion == "calm"
+                    await db_service.delete_conversation(conv["id"])
+            finally:
+                key_rotator._keys = old_keys
 
         asyncio.run(run())
 
     def test_memory_contextual_callback(self):
         async def run():
-            conv = await db_service.create_conversation(title="Callback Test")
-            # First message saves running memory
-            await reaction_director.plan_performance(
-                user_message="I am training for a running marathon.",
-                conversation_id=conv["id"],
-                history=[],
-                force_rehearsal=True,
-            )
-
-            # Follow-up message should trigger running callback
-            plan, _, _ = await reaction_director.plan_performance(
-                user_message="Good morning, what are we doing today?",
-                conversation_id=conv["id"],
-                history=[{"role": "user", "content": "I am training for a running marathon."}],
-                force_rehearsal=True,
-            )
-            full_speech = " ".join(s.text for s in plan.segments if s.type == "speech")
-            assert "training" in full_speech.lower() or "running" in full_speech.lower()
-            await db_service.delete_conversation(conv["id"])
+            mock_gemini_json = json.dumps({
+                "voice": "female",
+                "emotion": "curious",
+                "reasoning": "Referencing user marathon training from memories",
+                "segments": [
+                    {"type": "speech", "text": "Good morning! How is the running marathon training coming along?"}
+                ],
+                "newMemories": [{"key": "user_training", "content": "User is training for a marathon"}]
+            })
+            old_keys = key_rotator._keys
+            key_rotator._keys = [KeyInfo(alias="Key-1", secret="test_key_123")]
+            try:
+                with patch.object(gemini_service, "generate_content", return_value=(mock_gemini_json, "Key-1")):
+                    conv = await db_service.create_conversation(title="Callback Test")
+                    plan, created_keys, _ = await reaction_director.plan_performance(
+                        user_message="Good morning, what are we doing today?",
+                        conversation_id=conv["id"],
+                        history=[{"role": "user", "content": "I am training for a running marathon."}],
+                    )
+                    full_speech = " ".join(s.text for s in plan.segments if s.type == "speech")
+                    assert "marathon" in full_speech.lower() or "running" in full_speech.lower()
+                    assert "user_training" in created_keys
+                    await db_service.delete_conversation(conv["id"])
+            finally:
+                key_rotator._keys = old_keys
 
         asyncio.run(run())
 
     def test_no_keys_in_production_raises_recoverable_error(self):
         async def run():
-            old_env = settings.ENVIRONMENT
             old_keys = key_rotator._keys
             try:
-                settings.ENVIRONMENT = "production"
                 key_rotator._keys = []
                 conv = await db_service.create_conversation(title="No Keys Test")
                 with pytest.raises(NoKeysConfiguredError) as exc_info:
@@ -509,14 +560,10 @@ class TestReactionDirector:
                         user_message="Hello Vadivelu",
                         conversation_id=conv["id"],
                         history=[],
-                        force_rehearsal=False,
                     )
-                assert "No Gemini API keys configured. Please add GEMINI_API_KEY_1 to .env" in str(
-                    exc_info.value
-                )
+                assert "No Gemini API keys configured" in str(exc_info.value)
                 await db_service.delete_conversation(conv["id"])
             finally:
-                settings.ENVIRONMENT = old_env
                 key_rotator._keys = old_keys
 
         asyncio.run(run())
@@ -538,19 +585,49 @@ class TestAPIEndpoints:
         assert data["database"]["connected"] is True
         assert "keyRotation" in data
 
-    def test_chat_message_endpoint(self, client: TestClient):
-        res = client.post(
-            "/api/chat/message",
-            json={"content": "Hello Vadivelu! Tell me something funny."},
-        )
-        assert res.status_code == 200
-        data = res.json()
-        assert "userMessage" in data
-        assert "assistantMessage" in data
-        assert "performance" in data
-        assert data["userMessage"]["role"] == "user"
-        assert data["assistantMessage"]["role"] == "assistant"
-        assert len(data["performance"]["segments"]) > 0
+    def test_chat_message_endpoint_no_keys_returns_503(self, client: TestClient):
+        old_keys = key_rotator._keys
+        try:
+            key_rotator._keys = []
+            res = client.post(
+                "/api/chat/message",
+                json={"content": "Hello Vadivelu! Tell me something funny."},
+            )
+            assert res.status_code == 503
+            assert "No Gemini API keys configured" in res.json()["detail"]
+        finally:
+            key_rotator._keys = old_keys
+
+    def test_chat_message_endpoint_with_gemini(self, client: TestClient):
+        mock_gemini_json = json.dumps({
+            "voice": "female",
+            "emotion": "laughter",
+            "reasoning": "Greeting user with humor",
+            "segments": [
+                {"type": "speech", "text": "Vanakkam! Vadivelu AI here!"},
+                {"type": "meme", "memeId": "aahaa"},
+                {"type": "speech", "text": "What is on your mind today?"}
+            ],
+            "newMemories": []
+        })
+        old_keys = key_rotator._keys
+        key_rotator._keys = [KeyInfo(alias="Key-1", secret="test_key_123")]
+        try:
+            with patch.object(gemini_service, "generate_content", return_value=(mock_gemini_json, "Key-1")):
+                res = client.post(
+                    "/api/chat/message",
+                    json={"content": "Hello Vadivelu! Tell me something funny."},
+                )
+                assert res.status_code == 200
+                data = res.json()
+                assert "userMessage" in data
+                assert "assistantMessage" in data
+                assert "performance" in data
+                assert data["userMessage"]["role"] == "user"
+                assert data["assistantMessage"]["role"] == "assistant"
+                assert len(data["performance"]["segments"]) == 3
+        finally:
+            key_rotator._keys = old_keys
 
     def test_tts_synthesize_endpoint(self, client: TestClient):
         res = client.post(

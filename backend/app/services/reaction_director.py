@@ -1,4 +1,4 @@
-"""Reaction Director: Orchestrates speech interleaved with iconic meme reactions."""
+"""Reaction Director: Orchestrates dynamic Gemini responses interleaved with iconic meme reactions."""
 
 import json
 import logging
@@ -6,7 +6,13 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.config import settings
-from app.core.key_rotator import NoKeysConfiguredError, key_rotator
+from app.core.key_rotator import (
+    AllKeysInCooldownError,
+    AllKeysInvalidError,
+    KeyRotatorError,
+    NoKeysConfiguredError,
+    key_rotator,
+)
 from app.db.database import db_service
 from app.models.schemas import (
     MemeMetadata,
@@ -26,33 +32,32 @@ logger = logging.getLogger("vadivelu.director")
 
 DIRECTOR_SYSTEM_PROMPT = """You are the Reaction Director for "Vadivelu AI" — a witty, charismatic, Apple-inspired conversational AI voice companion inspired by legendary Tamil cinema comedy timing and modern warmth.
 
-Your goal is not just to generate text, but to DIRECT A COMPLETE AUDIO PERFORMANCE. You interleave spoken dialogue with iconic meme sound clips.
+Your goal is not just to generate text, but to DIRECT A COMPLETE SPOKEN AND MEME PERFORMANCE. You interleave your spoken dialogue with iconic meme sound clips.
 
-Follow these strict directing rules:
+Directing Guidelines:
 1. RESPONSE LENGTH & TONE:
-   - Casual chit-chat / quick queries: Short, punchy, lively (1-3 sentences total).
-   - Technical / educational queries: Clear, structured, helpful explanations with subtle wit.
-   - Serious / emotional / distress / health issues: Warm, empathetic, supportive, and STRICTLY DO NOT USE ANY MEMES.
+   - Casual conversation / quick queries: Short, punchy, natural (1-3 conversational sentences).
+   - Technical / educational queries: Clear, structured, helpful step-by-step explanations.
+   - Serious / emotional / distress / health queries: Warm, empathetic, supportive, and STRICTLY DO NOT USE ANY MEMES.
    - Personality Presets:
-     * normal: Friendly, witty, well-timed comedy.
+     * normal: Friendly, balanced, witty timing.
      * funny_friend: Playful banter, comedic exaggeration.
-     * sarcastic: Dry humor, ironic memes.
-     * high_energy: Hype, excitement, triumphant reactions.
+     * sarcastic: Dry humor, playful irony.
+     * high_energy: Hype, enthusiastic, triumphant.
      * calm_supportive: Gentle, encouraging, comforting.
-     * study_technical: Precise, clear, subtle jokes.
+     * study_technical: Precise, clear, structured.
 
 2. MEME PLACEMENT RULES:
-   - Only choose meme IDs from the AVAILABLE MEMES list below.
-   - Never use a meme if it's on cooldown.
-   - Use AT MOST 1 or 2 memes per response. Memes should enhance the comedic punch, not spam.
+   - Only choose meme IDs from the [AVAILABLE MEMES IN SOUNDBOARD] list provided below.
+   - Use AT MOST 1 or 2 memes per response where they genuinely improve the moment.
    - You can place memes before speech, between speech sentences, or after speech.
-   - If no meme fits the moment, or for serious topics, DO NOT include any meme segment.
+   - If no meme fits or the topic is serious, do NOT include any meme segment.
 
 3. CONTEXTUAL CALLBACKS:
-   - Check the RECALLED USER MEMORIES. If the user previously mentioned a goal, pet, job, or hobby (e.g. running a marathon, learning code), make a natural, witty callback!
+   - Check the RECALLED USER MEMORIES below. If the user previously mentioned a goal, pet, profession, or hobby, make a natural, witty connection.
 
 4. EXTRACT NEW USER FACTS:
-   - If the user shares a personal fact (e.g. "I'm training for a marathon", "My cat is Luna", "I got a new job"), include it in the "newMemories" list.
+   - If the user shares a personal fact (e.g., "I'm training for a marathon", "My dog is Rocky", "I'm an iOS engineer"), include it in the "newMemories" list.
 
 5. OUTPUT FORMAT:
    Return ONLY a strict JSON object with this exact schema:
@@ -62,7 +67,7 @@ Follow these strict directing rules:
      "reasoning": "brief director notes explaining tone and placement",
      "segments": [
        { "type": "speech", "text": "spoken part 1" },
-       { "type": "meme", "memeId": "meme_id_here" },
+       { "type": "meme", "memeId": "valid_meme_id_here" },
        { "type": "speech", "text": "spoken part 2" }
      ],
      "newMemories": [
@@ -72,8 +77,46 @@ Follow these strict directing rules:
 """
 
 
+def extract_json_from_gemini(raw_text: str) -> Dict[str, Any]:
+    """Cleanly extracts and parses JSON even if wrapped in markdown code blocks or conversational text."""
+    text = raw_text.strip()
+
+    # Try direct parse
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+
+    # Strip markdown code blocks ```json ... ```
+    match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text, re.IGNORECASE)
+    if match:
+        try:
+            return json.loads(match.group(1).strip())
+        except Exception:
+            pass
+
+    # Try finding outer braces { ... }
+    first_brace = text.find("{")
+    last_brace = text.rfind("}")
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        candidate = text[first_brace : last_brace + 1]
+        try:
+            return json.loads(candidate)
+        except Exception:
+            pass
+
+    # If all parsing fails, construct dynamic plan from raw text
+    return {
+        "voice": "female",
+        "emotion": "neutral",
+        "reasoning": "Direct Gemini conversational response",
+        "segments": [{"type": "speech", "text": text}],
+        "newMemories": [],
+    }
+
+
 class ReactionDirector:
-    """Orchestrates structured audio performances."""
+    """Orchestrates structured audio performances via dynamic Gemini generation."""
 
     async def plan_performance(
         self,
@@ -82,9 +125,8 @@ class ReactionDirector:
         history: List[Dict[str, Any]],
         personality: PersonalityPreset = "normal",
         voice_override: Optional[VoiceGender] = None,
-        force_rehearsal: bool = False,
     ) -> Tuple[PerformancePlan, List[str], str]:
-        """Directs the response into an ordered PerformancePlan.
+        """Directs the response into an ordered PerformancePlan dynamically generated by Gemini.
 
         Returns:
             Tuple[PerformancePlan, List[str], str]: (performance, created_memory_keys, key_alias_used)
@@ -94,34 +136,17 @@ class ReactionDirector:
         default_voice: VoiceGender = voice_override or user_settings.get("voiceGender", "female")
         memes_enabled = user_settings.get("memesEnabled", True)
 
+        # Check if API keys exist
+        if not key_rotator.has_keys:
+            raise NoKeysConfiguredError(
+                "No Gemini API keys configured. Please add your GEMINI_API_KEY_1 to .env or configure in Settings to chat."
+            )
+
         # Retrieve active memories and meme catalog
         active_memories = await memory_service.list_memories(active_only=True)
         all_memes = await meme_service.list_memes()
         meme_map = {m["id"]: m for m in all_memes}
         available_memes = [m for m in all_memes if m.get("isAvailableNow", True)]
-
-        # Check if keys exist or if rehearsal mode is needed
-        if force_rehearsal or not key_rotator.has_keys:
-            if not key_rotator.has_keys and not force_rehearsal:
-                # If no keys in env, check if user provided MOCK_GEMINI=true or environment allows rehearsal
-                allow_mock = settings.ENVIRONMENT in ("development", "test") or "pytest" in str(
-                    settings.BACKEND_DIR
-                )
-                if not allow_mock:
-                    raise NoKeysConfiguredError(
-                        "No Gemini API keys configured. Please add GEMINI_API_KEY_1 to .env"
-                    )
-
-            # Run intelligent Rehearsal Director
-            return await self._plan_rehearsal_performance(
-                user_message=user_message,
-                conversation_id=conversation_id,
-                personality=personality,
-                voice=default_voice,
-                memories=active_memories,
-                available_memes=available_memes if memes_enabled else [],
-                meme_map=meme_map,
-            )
 
         # Format prompt sections
         memories_text = memory_service.format_memories_for_prompt(active_memories)
@@ -141,29 +166,19 @@ class ReactionDirector:
 
         # Build contents from recent history + new message
         contents = []
-        for h in history[-8:]:  # Last 8 messages for context
+        for h in history[-10:]:  # Last 10 messages for conversation context
             role = "user" if h["role"] == "user" else "model"
             contents.append({"role": role, "parts": [{"text": h["content"]}]})
         contents.append({"role": "user", "parts": [{"text": user_message}]})
 
-        try:
-            raw_json, key_alias = await gemini_service.generate_content(
-                contents=contents,
-                system_instruction=system_instruction,
-            )
-            # Parse response
-            plan_dict = json.loads(raw_json)
-        except Exception as e:
-            logger.warning(f"Gemini call or JSON parsing failed: {e}. Falling back to rehearsal.")
-            return await self._plan_rehearsal_performance(
-                user_message=user_message,
-                conversation_id=conversation_id,
-                personality=personality,
-                voice=default_voice,
-                memories=active_memories,
-                available_memes=available_memes if memes_enabled else [],
-                meme_map=meme_map,
-            )
+        # Generate dynamically via Gemini API
+        raw_text, key_alias = await gemini_service.generate_content(
+            contents=contents,
+            system_instruction=system_instruction,
+        )
+
+        # Parse response safely
+        plan_dict = extract_json_from_gemini(raw_text)
 
         # Process new memories extracted by LLM
         new_memory_keys = []
@@ -176,7 +191,7 @@ class ReactionDirector:
                 )
                 new_memory_keys.append(item["key"])
 
-        # Also run heuristics in case LLM missed any explicit user declarations
+        # Also run heuristics to catch explicit user declarations (training, profession, pet, etc.)
         heuristic_keys = await memory_service.record_user_facts(
             user_message, source_conv_id=conversation_id
         )
@@ -190,10 +205,15 @@ class ReactionDirector:
             raw_segments, meme_map, memes_enabled
         )
 
+        # Ensure selected voice matches override if provided
+        final_voice = voice_override or plan_dict.get("voice", default_voice)
+        if final_voice not in ("female", "male"):
+            final_voice = default_voice
+
         plan = PerformancePlan(
-            voice=plan_dict.get("voice", default_voice),
+            voice=final_voice,
             emotion=plan_dict.get("emotion", "neutral"),
-            reasoning=plan_dict.get("reasoning", "Directed performance."),
+            reasoning=plan_dict.get("reasoning", "Dynamic Gemini response"),
             segments=validated_segments,
         )
 
@@ -220,7 +240,7 @@ class ReactionDirector:
                 meme = meme_map.get(meme_id)
                 # Ensure meme exists and is not in cooldown
                 if meme and meme.get("isAvailableNow", True):
-                    # Record usage to set cooldown
+                    # Record usage to trigger cooldown
                     await meme_service.record_usage(meme_id)
                     enriched.append(
                         MemeSegment(
@@ -228,13 +248,12 @@ class ReactionDirector:
                             title=meme["title"],
                             audio_url=meme["audioUrl"],
                             thumbnail_url=meme.get("thumbnailUrl"),
-                            duration_ms=meme.get("durationMs", 1500),
+                            duration_ms=meme.get("durationMs", 1800),
                         )
                     )
                 else:
-                    # If meme is unavailable or invalid, replace with a brief pause
                     logger.info(
-                        f"Meme {meme_id} is unavailable or invalid. Omitted from performance."
+                        f"Meme {meme_id} is unavailable or on cooldown. Skipping from performance."
                     )
             elif seg_type == "pause":
                 enriched.append(PauseSegment(duration_ms=seg.get("durationMs", 400)))
@@ -243,192 +262,11 @@ class ReactionDirector:
         if not enriched:
             enriched.append(
                 SpeechSegment(
-                    text="Vadivelu AI here! Ready to rock with full comedy timing!"
+                    text="I understand! Let's continue."
                 )
             )
 
         return enriched
-
-    async def _plan_rehearsal_performance(
-        self,
-        user_message: str,
-        conversation_id: str,
-        personality: PersonalityPreset,
-        voice: VoiceGender,
-        memories: List[Dict[str, Any]],
-        available_memes: List[Dict[str, Any]],
-        meme_map: Dict[str, Dict[str, Any]],
-    ) -> Tuple[PerformancePlan, List[str], str]:
-        """Intelligent rule-based Rehearsal Director when no API keys are provided or for testing."""
-        msg_lower = user_message.lower()
-
-        # Extract memories
-        created_keys = await memory_service.record_user_facts(
-            user_message, source_conv_id=conversation_id
-        )
-
-        # Check for callbacks from existing memories
-        callback_text = ""
-        for m in memories:
-            if "training" in m["key"] or "marathon" in m["content"].lower():
-                callback_text = " By the way, how is your training going? Don't skip your running sessions!"
-                break
-            elif "pet" in m["key"]:
-                callback_text = " Give my love to your pet!"
-                break
-
-        avail_ids = {m["id"] for m in available_memes}
-        segments: List[PerformanceSegment] = []
-        emotion = "laughter"
-        reasoning = f"Rehearsal director response under '{personality}' personality preset."
-
-        # Detect topic and select fitting meme and speech
-        if any(w in msg_lower for w in ("money", "crypto", "invest", "stonk", "profit", "deal")):
-            emotion = "irony"
-            speech1 = "Look at this financial mastermind in the room!"
-            speech2 = f"One step closer to Forbes 30 under 30!{callback_text}"
-            segments.append(SpeechSegment(text=speech1))
-            if "stonks" in avail_ids:
-                m = meme_map["stonks"]
-                await meme_service.record_usage("stonks")
-                segments.append(
-                    MemeSegment(
-                        meme_id="stonks",
-                        title=m["title"],
-                        audio_url=m["audioUrl"],
-                        thumbnail_url=m["thumbnailUrl"],
-                        duration_ms=m["durationMs"],
-                    )
-                )
-            segments.append(SpeechSegment(text=speech2))
-
-        elif any(
-            w in msg_lower
-            for w in (
-                "win",
-                "won",
-                "passed",
-                "success",
-                "achieved",
-                "completed",
-                "marathon",
-                "running",
-                "champion",
-                "competition",
-                "victory",
-            )
-        ):
-            emotion = "celebration"
-            speech1 = "Sensational! Now that is what I call absolute champion performance!"
-            speech2 = f"You knocked it straight out of the park!{callback_text}"
-            segments.append(SpeechSegment(text=speech1))
-            if "kalakkunga" in avail_ids:
-                m = meme_map["kalakkunga"]
-                await meme_service.record_usage("kalakkunga")
-                segments.append(
-                    MemeSegment(
-                        meme_id="kalakkunga",
-                        title=m["title"],
-                        audio_url=m["audioUrl"],
-                        thumbnail_url=m["thumbnailUrl"],
-                        duration_ms=m["durationMs"],
-                    )
-                )
-            segments.append(SpeechSegment(text=speech2))
-
-        elif any(w in msg_lower for w in ("shock", "surprise", "unbelievable", "omg", "what happened")):
-            emotion = "shock"
-            speech1 = "Wait, what?! Hold on a second, are you for real right now?"
-            speech2 = f"My jaw is officially on the floor!{callback_text}"
-            segments.append(SpeechSegment(text=speech1))
-            if "adengappa" in avail_ids:
-                m = meme_map["adengappa"]
-                await meme_service.record_usage("adengappa")
-                segments.append(
-                    MemeSegment(
-                        meme_id="adengappa",
-                        title=m["title"],
-                        audio_url=m["audioUrl"],
-                        thumbnail_url=m["thumbnailUrl"],
-                        duration_ms=m["durationMs"],
-                    )
-                )
-            segments.append(SpeechSegment(text=speech2))
-
-        elif any(w in msg_lower for w in ("sad", "missed", "lost", "fail", "forgot", "bad luck", "ruined")):
-            emotion = "awkward"
-            speech1 = "Aiyo! Such a golden opportunity vanished into thin air!"
-            speech2 = f"Don't worry, every champion faces a hiccup. Tomorrow is another day!{callback_text}"
-            segments.append(SpeechSegment(text=speech1))
-            if "vadapoche" in avail_ids:
-                m = meme_map["vadapoche"]
-                await meme_service.record_usage("vadapoche")
-                segments.append(
-                    MemeSegment(
-                        meme_id="vadapoche",
-                        title=m["title"],
-                        audio_url=m["audioUrl"],
-                        thumbnail_url=m["thumbnailUrl"],
-                        duration_ms=m["durationMs"],
-                    )
-                )
-            segments.append(SpeechSegment(text=speech2))
-
-        elif any(w in msg_lower for w in ("drama", "headache", "suffering", "problem", "traffic", "bug")):
-            emotion = "awkward"
-            speech1 = "What kind of unbearable cosmic drama has descended upon us today!"
-            speech2 = f"Take a deep breath. We will survive this madness!{callback_text}"
-            segments.append(SpeechSegment(text=speech1))
-            if "enna_koduma" in avail_ids:
-                m = meme_map["enna_koduma"]
-                await meme_service.record_usage("enna_koduma")
-                segments.append(
-                    MemeSegment(
-                        meme_id="enna_koduma",
-                        title=m["title"],
-                        audio_url=m["audioUrl"],
-                        thumbnail_url=m["thumbnailUrl"],
-                        duration_ms=m["durationMs"],
-                    )
-                )
-            segments.append(SpeechSegment(text=speech2))
-
-        elif any(w in msg_lower for w in ("hurt", "depressed", "emergency", "sick", "hospital", "pain")):
-            # Serious / distressed -> empathetic, NO MEMES!
-            emotion = "calm"
-            segments.append(
-                SpeechSegment(
-                    text="I am truly sorry you're going through this. Please take gentle care of yourself, and don't hesitate to reach out to someone who can support you. I'm right here with you."
-                )
-            )
-
-        else:
-            # Default lively response
-            speech1 = "Vanakkam! Vadivelu AI in the house, fully energized and ready for you!"
-            speech2 = f"Hit me with whatever is on your mind!{callback_text}"
-            segments.append(SpeechSegment(text=speech1))
-            if "aahaa" in avail_ids:
-                m = meme_map["aahaa"]
-                await meme_service.record_usage("aahaa")
-                segments.append(
-                    MemeSegment(
-                        meme_id="aahaa",
-                        title=m["title"],
-                        audio_url=m["audioUrl"],
-                        thumbnail_url=m["thumbnailUrl"],
-                        duration_ms=m["durationMs"],
-                    )
-                )
-            segments.append(SpeechSegment(text=speech2))
-
-        plan = PerformancePlan(
-            voice=voice,
-            emotion=emotion,
-            reasoning=reasoning,
-            segments=segments,
-        )
-
-        return plan, created_keys, "mock-rehearsal"
 
 
 reaction_director = ReactionDirector()
