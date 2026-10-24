@@ -98,115 +98,8 @@ def init_db() -> None:
             """
         )
 
-    # Seed initial memes if empty
-    seed_initial_memes(conn)
     # Seed initial settings if empty
     seed_default_settings(conn)
-
-
-def seed_initial_memes(conn: sqlite3.Connection) -> None:
-    """Seed the 6 starter Vadivelu memes if the table is empty."""
-    cursor = conn.cursor()
-    cursor.execute("SELECT COUNT(*) FROM memes")
-    if cursor.fetchone()[0] > 0:
-        return
-
-    starter_memes = [
-        {
-            "id": "adengappa",
-            "title": "Adengappa!",
-            "file_path": "memes/adengappa.mp3",
-            "audio_url": "/memes/adengappa.mp3",
-            "thumbnail_url": "/memes/adengappa.svg",
-            "duration_ms": 2000,
-            "tags": json.dumps(["shock", "surprise", "classic", "tamil"]),
-            "emotion": "shock",
-            "context_hint": "Huge surprise or disbelief",
-            "cooldown_seconds": 30,
-        },
-        {
-            "id": "kalakkunga",
-            "title": "Kalakkunga Kalakkunga!",
-            "file_path": "memes/kalakkunga.mp3",
-            "audio_url": "/memes/kalakkunga.mp3",
-            "thumbnail_url": "/memes/kalakkunga.svg",
-            "duration_ms": 1800,
-            "tags": json.dumps(["celebration", "victory", "hype", "win"]),
-            "emotion": "celebration",
-            "context_hint": "Awesome achievement or victory",
-            "cooldown_seconds": 30,
-        },
-        {
-            "id": "stonks",
-            "title": "Stonks!",
-            "file_path": "memes/stonks.mp3",
-            "audio_url": "/memes/stonks.mp3",
-            "thumbnail_url": "/memes/stonks.svg",
-            "duration_ms": 2200,
-            "tags": json.dumps(["money", "finance", "sarcasm", "crypto"]),
-            "emotion": "irony",
-            "context_hint": "Questionable financial or strategic move",
-            "cooldown_seconds": 30,
-        },
-        {
-            "id": "aahaa",
-            "title": "Aahaa Aahaa!",
-            "file_path": "memes/aahaa.mp3",
-            "audio_url": "/memes/aahaa.mp3",
-            "thumbnail_url": "/memes/aahaa.svg",
-            "duration_ms": 1900,
-            "tags": json.dumps(["funny", "laugh", "humor", "comedy"]),
-            "emotion": "laughter",
-            "context_hint": "Funny or ridiculous situation",
-            "cooldown_seconds": 30,
-        },
-        {
-            "id": "vadapoche",
-            "title": "Vada Poche!",
-            "file_path": "memes/vadapoche.mp3",
-            "audio_url": "/memes/vadapoche.mp3",
-            "thumbnail_url": "/memes/vadapoche.svg",
-            "duration_ms": 2100,
-            "tags": json.dumps(["regret", "missed", "food", "sad-funny"]),
-            "emotion": "awkward",
-            "context_hint": "Disappointment or missed chance",
-            "cooldown_seconds": 30,
-        },
-        {
-            "id": "enna_koduma",
-            "title": "Enna Koduma Saravanan Idhu!",
-            "file_path": "memes/enna_koduma.mp3",
-            "audio_url": "/memes/enna_koduma.mp3",
-            "thumbnail_url": "/memes/enna_koduma.svg",
-            "duration_ms": 2300,
-            "tags": json.dumps(["drama", "overreaction", "dramatic", "cinema"]),
-            "emotion": "awkward",
-            "context_hint": "Unbelievable drama or suffering",
-            "cooldown_seconds": 30,
-        },
-    ]
-
-    with conn:
-        for m in starter_memes:
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO memes
-                (id, title, file_path, audio_url, thumbnail_url, duration_ms, tags, emotion, context_hint, cooldown_seconds, use_count, is_favorite)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
-                """,
-                (
-                    m["id"],
-                    m["title"],
-                    m["file_path"],
-                    m["audio_url"],
-                    m["thumbnail_url"],
-                    m["duration_ms"],
-                    m["tags"],
-                    m["emotion"],
-                    m["context_hint"],
-                    m["cooldown_seconds"],
-                ),
-            )
 
 
 def seed_default_settings(conn: sqlite3.Connection) -> None:
@@ -775,7 +668,7 @@ class DatabaseService:
         with conn:
             conn.execute(
                 """
-                INSERT INTO memes
+                INSERT OR REPLACE INTO memes
                 (id, title, file_path, audio_url, thumbnail_url, duration_ms, tags, emotion, context_hint, cooldown_seconds, use_count, is_favorite)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
                 """,

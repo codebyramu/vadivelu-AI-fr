@@ -96,7 +96,7 @@ class GeminiService:
 
                 # 3. Append function result to conversation history
                 working_contents.append({
-                    "role": "function",
+                    "role": "user",
                     "parts": [{
                         "functionResponse": {
                             "name": func_name,
@@ -154,7 +154,7 @@ class GeminiService:
                 error_body = response.text
                 last_error_msg = f"HTTP {response.status_code}: {error_body[:200]}"
                 logger.warning(
-                    f"Gemini API returned error for {key_info.alias}: status {response.status_code}"
+                    f"Gemini API returned error for {key_info.alias}: status {response.status_code} - {error_body}"
                 )
                 await key_rotator.record_failure(
                     key_info.alias, response.status_code, error_body

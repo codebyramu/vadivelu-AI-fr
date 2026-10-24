@@ -149,12 +149,14 @@ class ReactionDirector:
 
         all_memes = await meme_service.list_memes()
         meme_map = {m["id"]: m for m in all_memes}
+        memes_catalog_text = meme_service.format_memes_for_director(all_memes)
 
         system_instruction = (
             f"{DIRECTOR_SYSTEM_PROMPT}\n\n"
             f"Active Personality Preset: {personality}\n"
             f"Default Voice Tone: {default_voice}\n"
-            f"Memes Enabled Status: {'YES' if memes_enabled else 'DISABLED by user settings'}\n"
+            f"Memes Enabled Status: {'YES' if memes_enabled else 'DISABLED by user settings'}\n\n"
+            f"AVAILABLE REAL VADIVELU DIALOGUES CATALOG (FROM SUPABASE):\n{memes_catalog_text}\n"
         )
 
         # Build contents from recent history + new message
@@ -164,14 +166,12 @@ class ReactionDirector:
             contents.append({"role": role, "parts": [{"text": h["content"]}]})
         contents.append({"role": "user", "parts": [{"text": user_message}]})
 
-        # Provide tool calling so Gemini can search the meme soundboard intelligently
-        tools = tool_registry.get_gemini_tools_spec() if memes_enabled else None
-
         raw_text, key_alias = await gemini_service.generate_content(
             contents=contents,
             system_instruction=system_instruction,
-            tools=tools,
-            tool_executor=tool_registry.execute_tool if tools else None,
+            generation_config={"responseMimeType": "application/json", "maxOutputTokens": 2048},
+            tools=None,
+            tool_executor=None,
         )
 
         # Parse plan safely

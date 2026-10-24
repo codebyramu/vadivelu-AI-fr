@@ -327,48 +327,42 @@ class TestTTSEngine:
 
 
 class TestMemeLibrary:
-    """Test seed memes, audio files, SVGs, cooldowns, and catalog formatting."""
+    """Test dynamic meme creation, cooldowns, and catalog formatting."""
 
-    def test_seed_memes_loaded(self):
+    def test_meme_crud_and_lifecycle(self):
         async def run():
+            created = await meme_service.create_meme(
+                id="test_meme_1",
+                title="Test Meme",
+                file_path="memes/test_meme_1.mp3",
+                audio_url="/memes/test_meme_1.mp3",
+                emotion="laughter",
+                context_hint="Funny situation",
+                cooldown_seconds=30,
+            )
+            assert created["id"] == "test_meme_1"
+
+            # Check list
             memes = await meme_service.list_memes()
-            meme_ids = {m["id"] for m in memes}
-            expected = {"adengappa", "kalakkunga", "stonks", "aahaa", "vadapoche", "enna_koduma"}
-            assert expected.issubset(meme_ids)
+            assert any(m["id"] == "test_meme_1" for m in memes)
 
-        asyncio.run(run())
+            # Check get
+            fetched = await meme_service.get_meme("test_meme_1")
+            assert fetched is not None
+            assert fetched["title"] == "Test Meme"
 
-    def test_seed_meme_audio_files_exist_and_playable(self):
-        memes_dir = settings.MEME_STORAGE_PATH
-        expected = ["adengappa", "kalakkunga", "stonks", "aahaa", "vadapoche", "enna_koduma"]
-        for m_id in expected:
-            audio_path = memes_dir / f"{m_id}.mp3"
-            svg_path = memes_dir / f"{m_id}.svg"
-            assert audio_path.is_file(), f"Audio file {audio_path} does not exist"
-            assert audio_path.stat().st_size > 5000, f"Audio file {audio_path} is too small"
-            assert svg_path.is_file(), f"SVG file {svg_path} does not exist"
-            assert svg_path.stat().st_size > 100, f"SVG file {svg_path} is too small"
-
-    def test_meme_cooldown_tracking(self):
-        async def run():
-            # Initially available
-            meme = await meme_service.get_meme("kalakkunga")
-            assert meme is not None
+            # Format for director
+            formatted = meme_service.format_memes_for_director([fetched])
+            assert "test_meme_1" in formatted
 
             # Record usage
-            await meme_service.record_usage("kalakkunga")
-            updated = await meme_service.get_meme("kalakkunga")
+            await meme_service.record_usage("test_meme_1")
+            updated = await meme_service.get_meme("test_meme_1")
             assert updated["isAvailableNow"] is False
             assert updated["useCount"] >= 1
 
-        asyncio.run(run())
-
-    def test_meme_director_format(self):
-        async def run():
-            memes = await meme_service.list_memes()
-            formatted = meme_service.format_memes_for_director(memes)
-            assert "adengappa" in formatted
-            assert "kalakkunga" in formatted
+            # Clean up
+            await meme_service.delete_meme("test_meme_1")
 
         asyncio.run(run())
 
@@ -423,6 +417,14 @@ class TestReactionDirector:
 
     def test_celebration_rehearsal_performance(self):
         async def run():
+            # Create temporary test meme
+            await meme_service.create_meme(
+                id="kalakkunga",
+                title="Kalakkunga",
+                file_path="memes/kalakkunga.mp3",
+                audio_url="/memes/kalakkunga.mp3",
+                emotion="celebration",
+            )
             mock_gemini_json = json.dumps({
                 "voice": "female",
                 "emotion": "celebration",
@@ -454,11 +456,20 @@ class TestReactionDirector:
                     await db_service.delete_conversation(conv["id"])
             finally:
                 key_rotator._keys = old_keys
+                await meme_service.delete_meme("kalakkunga")
 
         asyncio.run(run())
 
     def test_financial_irony_performance(self):
         async def run():
+            # Create temporary test meme
+            await meme_service.create_meme(
+                id="stonks",
+                title="Stonks",
+                file_path="memes/stonks.mp3",
+                audio_url="/memes/stonks.mp3",
+                emotion="irony",
+            )
             mock_gemini_json = json.dumps({
                 "voice": "male",
                 "emotion": "irony",
@@ -486,6 +497,7 @@ class TestReactionDirector:
                     await db_service.delete_conversation(conv["id"])
             finally:
                 key_rotator._keys = old_keys
+                await meme_service.delete_meme("stonks")
 
         asyncio.run(run())
 
@@ -599,6 +611,13 @@ class TestAPIEndpoints:
             key_rotator._keys = old_keys
 
     def test_chat_message_endpoint_with_gemini(self, client: TestClient):
+        asyncio.run(meme_service.create_meme(
+            id="aahaa",
+            title="Aahaa",
+            file_path="memes/aahaa.mp3",
+            audio_url="/memes/aahaa.mp3",
+            emotion="laughter",
+        ))
         mock_gemini_json = json.dumps({
             "voice": "female",
             "emotion": "laughter",
@@ -628,6 +647,7 @@ class TestAPIEndpoints:
                 assert len(data["performance"]["segments"]) == 3
         finally:
             key_rotator._keys = old_keys
+            asyncio.run(meme_service.delete_meme("aahaa"))
 
     def test_tts_synthesize_endpoint(self, client: TestClient):
         res = client.post(
@@ -695,16 +715,27 @@ class TestAPIEndpoints:
         assert res_del.json()["success"] is True
 
     def test_memes_api(self, client: TestClient):
+        # Create test meme via API
+        asyncio.run(meme_service.create_meme(
+            id="test_api_meme",
+            title="API Test Meme",
+            file_path="memes/test_api_meme.mp3",
+            audio_url="/memes/test_api_meme.mp3",
+            emotion="laughter",
+        ))
+
         res = client.get("/api/memes")
         assert res.status_code == 200
         memes = res.json()
-        assert len(memes) >= 6
+        assert len(memes) >= 1
 
         # Patch favorite
-        meme_id = memes[0]["id"]
-        res_patch = client.patch(f"/api/memes/{meme_id}", json={"isFavorite": True})
+        res_patch = client.patch("/api/memes/test_api_meme", json={"isFavorite": True})
         assert res_patch.status_code == 200
         assert res_patch.json()["isFavorite"] is True
+
+        # Clean up
+        asyncio.run(meme_service.delete_meme("test_api_meme"))
 
     def test_settings_api(self, client: TestClient):
         res_get = client.get("/api/settings")
@@ -723,11 +754,12 @@ class TestAPIEndpoints:
         assert "messages" in data
 
     def test_static_meme_serving(self, client: TestClient):
-        for meme_id in ["adengappa", "kalakkunga", "stonks", "aahaa", "vadapoche", "enna_koduma"]:
-            res_audio = client.get(f"/memes/{meme_id}.mp3")
+        test_file = settings.MEME_STORAGE_PATH / "test_static.mp3"
+        test_file.write_bytes(b"TEST_AUDIO_BYTES_FOR_STATIC_SERVING")
+        try:
+            res_audio = client.get("/memes/test_static.mp3")
             assert res_audio.status_code == 200
-            assert len(res_audio.content) > 5000
-
-            res_svg = client.get(f"/memes/{meme_id}.svg")
-            assert res_svg.status_code == 200
-            assert len(res_svg.content) > 100
+            assert res_audio.content == b"TEST_AUDIO_BYTES_FOR_STATIC_SERVING"
+        finally:
+            if test_file.exists():
+                test_file.unlink()
