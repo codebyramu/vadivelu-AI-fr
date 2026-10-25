@@ -23,6 +23,7 @@ interface MiniVoiceWidgetProps {
   interimTranscript?: string;
   isDarkTheme: boolean;
   voiceGender?: 'male' | 'female';
+  isTranscribing?: boolean;
 }
 
 /**
@@ -41,6 +42,7 @@ export const MiniVoiceWidget: React.FC<MiniVoiceWidgetProps> = ({
   activeMeme,
   transcript = '',
   interimTranscript = '',
+  isTranscribing = false,
 }) => {
   if (!isOpen) return null;
 
@@ -52,6 +54,8 @@ export const MiniVoiceWidget: React.FC<MiniVoiceWidgetProps> = ({
     labelText = activeMeme.title || 'Meme clip';
   } else if (isPlayingAudio) {
     labelText = 'Speaking...';
+  } else if (isTranscribing) {
+    labelText = 'Transcribing...';
   } else if (playbackStatus === 'preparing') {
     labelText = 'Preparing...';
   } else if (isListening) {

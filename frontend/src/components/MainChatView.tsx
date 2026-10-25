@@ -69,6 +69,7 @@ interface MainChatViewProps {
   onToggleVoiceListening?: () => void;
   voiceTranscript?: string;
   voiceInterimTranscript?: string;
+  isTranscribing?: boolean;
 }
 
 export const MainChatView: React.FC<MainChatViewProps> = ({
@@ -105,6 +106,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   onToggleVoiceListening,
   voiceTranscript = '',
   voiceInterimTranscript = '',
+  isTranscribing = false,
 }) => {
   const [inputText, setInputText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -783,6 +785,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
               activeMeme={activeMeme}
               transcript={voiceTranscript}
               interimTranscript={voiceInterimTranscript}
+              isTranscribing={isTranscribing}
               isDarkTheme={isDarkTheme}
             />
           )}

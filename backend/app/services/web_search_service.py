@@ -276,12 +276,31 @@ class WebSearchService:
             return {"expression": expression, "error": f"Invalid expression: {str(e)}", "status": "error"}
 
     async def transcribe_audio(self, audio_bytes: bytes, mime_type: str = "audio/webm") -> str:
-        """Transcribes spoken audio into text using Gemini 3.5 Flash."""
+        """Transcribes spoken audio into text using Gemini 3.5 Flash, normalized via ffmpeg."""
         if not audio_bytes or len(audio_bytes) < 100:
             return ""
 
-        logger.info(f"Transcribing audio ({len(audio_bytes)} bytes, {mime_type}) via Gemini...")
-        b64_data = base64.b64encode(audio_bytes).decode("utf-8")
+        # Normalize any uploaded container (webm, ogg, mp4) into standard 16kHz mono WAV for Gemini
+        wav_bytes = audio_bytes
+        target_mime = mime_type
+        try:
+            import subprocess
+            p = subprocess.run(
+                ["ffmpeg", "-y", "-i", "pipe:0", "-ar", "16000", "-ac", "1", "-f", "wav", "pipe:1"],
+                input=audio_bytes,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=5,
+            )
+            if p.returncode == 0 and len(p.stdout) > 44:
+                wav_bytes = p.stdout
+                target_mime = "audio/wav"
+                logger.info(f"Converted {len(audio_bytes)} bytes ({mime_type}) to {len(wav_bytes)} bytes WAV")
+        except Exception as conv_err:
+            logger.warning(f"Audio ffmpeg conversion to wav failed, using original format: {conv_err}")
+
+        logger.info(f"Transcribing audio ({len(wav_bytes)} bytes, {target_mime}) via Gemini...")
+        b64_data = base64.b64encode(wav_bytes).decode("utf-8")
 
         prompt = (
             "You are an ultra-accurate speech-to-text transcription engine. "
@@ -297,7 +316,7 @@ class WebSearchService:
                 "parts": [
                     {
                         "inlineData": {
-                            "mimeType": mime_type,
+                            "mimeType": target_mime,
                             "data": b64_data,
                         }
                     },

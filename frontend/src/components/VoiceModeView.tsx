@@ -31,6 +31,7 @@ interface VoiceModeViewProps {
   onPlayMessageAudio?: (msg: Message) => void;
   onSendMessage?: (text: string) => void;
   isSendingMessage?: boolean;
+  isTranscribing?: boolean;
 }
 
 /**
@@ -52,6 +53,7 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
   onPlayMessageAudio,
   onSendMessage,
   isSendingMessage = false,
+  isTranscribing = false,
 }) => {
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -63,6 +65,8 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
     statusText = activeMeme.title || activeMeme.memeId;
   } else if (isPlayingAudio) {
     statusText = 'Vadivelu is speaking…';
+  } else if (isTranscribing) {
+    statusText = 'Transcribing your voice…';
   } else if (playbackStatus === 'preparing' || isSendingMessage) {
     statusText = 'Thinking…';
   } else if (isListening) {

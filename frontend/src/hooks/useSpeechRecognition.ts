@@ -53,7 +53,7 @@ export interface UseSpeechRecognitionOptions {
 
 export function useSpeechRecognition({
   mode = 'push_to_talk',
-  silenceTimeoutMs = 1800,
+  silenceTimeoutMs = 1500,
   onSpeechResult,
   onFinalTranscript,
   onSpeechStart,
@@ -69,19 +69,22 @@ export function useSpeechRecognition({
 
   const isListeningRef = useRef(false);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
-  const silenceTimerRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const micAnalyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const activeTranscriptRef = useRef('');
-  
+
+  // VAD (Voice Activity Detection) tracking
+  const hasSpokenInTurnRef = useRef(false);
+  const lastSoundTimestampRef = useRef<number>(0);
+  const isFinalizingTurnRef = useRef(false);
+
   // MediaRecorder audio backup for 100% reliable backend Gemini transcription
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
   useEffect(() => {
-    // Check if either Web Speech API or getUserMedia is supported
     const hasWebSpeech = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
     const hasMediaDevices = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
     setIsSupported(hasWebSpeech || hasMediaDevices);
@@ -100,39 +103,105 @@ export function useSpeechRecognition({
     setMicLevel(0);
   }, []);
 
-  // Process recorded audio fallback via Gemini STT backend
-  const processAudioFallback = useCallback(async () => {
-    if (audioChunksRef.current.length === 0) return;
-    const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-    audioChunksRef.current = [];
-    
-    // Only transcribe if we don't already have text from Web Speech
-    if (!activeTranscriptRef.current.trim() && audioBlob.size > 2000) {
+  // Finalizes the current spoken segment and sends either native text or audio to Gemini
+  const finalizeSpeechTurn = useCallback(async () => {
+    if (isFinalizingTurnRef.current) return;
+    isFinalizingTurnRef.current = true;
+
+    // 1. If native WebSpeech provided a transcript
+    const nativeText = activeTranscriptRef.current.trim();
+    if (nativeText) {
+      onFinalTranscript?.(nativeText);
+      activeTranscriptRef.current = '';
+      setTranscript(nativeText);
+      setInterimTranscript('');
+      hasSpokenInTurnRef.current = false;
+      audioChunksRef.current = [];
+      isFinalizingTurnRef.current = false;
+      return;
+    }
+
+    // 2. Otherwise use MediaRecorder audio -> Gemini transcription backend
+    const recorder = mediaRecorderRef.current;
+    if (recorder && recorder.state !== 'inactive') {
       try {
-        setIsTranscribing(true);
-        const res = await api.transcribeAudio(audioBlob);
-        if (res && res.transcript && res.transcript.trim()) {
-          const text = res.transcript.trim();
-          activeTranscriptRef.current = text;
-          setTranscript(text);
-          onFinalTranscript?.(text);
-        }
-      } catch (err) {
-        console.warn('Backend audio transcription fallback failed:', err);
-      } finally {
-        setIsTranscribing(false);
+        // Stop current recorder to finalize current audio chunks
+        recorder.stop();
+      } catch {
+        // ignore
       }
     }
-  }, [onFinalTranscript]);
 
-  // Initialize Microphone Web Audio Analyser and MediaRecorder
+    // Wait slightly for final ondataavailable event
+    await new Promise(resolve => setTimeout(resolve, 80));
+
+    const chunks = [...audioChunksRef.current];
+    audioChunksRef.current = [];
+    hasSpokenInTurnRef.current = false;
+
+    if (chunks.length > 0) {
+      const audioBlob = new Blob(chunks, { type: recorder?.mimeType || 'audio/webm' });
+      if (audioBlob.size > 1500) {
+        try {
+          setIsTranscribing(true);
+          setInterimTranscript('Transcribing speech...');
+          const res = await api.transcribeAudio(audioBlob);
+          if (res && res.transcript && res.transcript.trim()) {
+            const cleanText = res.transcript.trim();
+            setTranscript(cleanText);
+            setInterimTranscript('');
+            onFinalTranscript?.(cleanText);
+          } else {
+            setInterimTranscript('');
+          }
+        } catch (err) {
+          console.warn('Audio transcription error:', err);
+          setInterimTranscript('');
+        } finally {
+          setIsTranscribing(false);
+        }
+      }
+    }
+
+    isFinalizingTurnRef.current = false;
+
+    // In continuous mode, restart recording for next sentence if still listening
+    if (mode === 'continuous' && isListeningRef.current && micStreamRef.current) {
+      try {
+        const stream = micStreamRef.current;
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+        const newRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        newRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) {
+            audioChunksRef.current.push(e.data);
+          }
+        };
+        mediaRecorderRef.current = newRecorder;
+        newRecorder.start(200);
+      } catch (err) {
+        console.warn('Could not restart recorder in continuous mode:', err);
+      }
+    }
+  }, [mode, onFinalTranscript]);
+
+  // Initialize Microphone Web Audio Analyser, VAD, and MediaRecorder
   const initMicAudio = useCallback(async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) return null;
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       micStreamRef.current = stream;
 
-      // Initialize MediaRecorder for backend audio fallback
+      // Initialize MediaRecorder
       try {
         const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
           ? 'audio/webm;codecs=opus'
@@ -151,6 +220,7 @@ export function useSpeechRecognition({
         console.warn('MediaRecorder init error:', recErr);
       }
 
+      // Initialize Web Audio API Analyser for level visualization & VAD
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         const ctx = audioContextRef.current || new AudioCtx();
@@ -166,36 +236,47 @@ export function useSpeechRecognition({
         micAnalyserRef.current = analyser;
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
-        const updateLevel = () => {
-          if (!micStreamRef.current) return;
+
+        const updateLevelAndVAD = () => {
+          if (!micStreamRef.current || !isListeningRef.current) return;
           analyser.getByteFrequencyData(dataArray);
+
           let sum = 0;
           for (let i = 0; i < dataArray.length; i++) {
             sum += dataArray[i];
           }
           const avg = sum / dataArray.length;
-          setMicLevel(avg / 128); // 0 to ~2
-          animationFrameRef.current = requestAnimationFrame(updateLevel);
+          const normalizedLevel = avg / 128;
+          setMicLevel(normalizedLevel);
+
+          const now = Date.now();
+          // Speech energy threshold (voice activity detection)
+          if (avg > 7.5) {
+            hasSpokenInTurnRef.current = true;
+            lastSoundTimestampRef.current = now;
+          } else if (hasSpokenInTurnRef.current && lastSoundTimestampRef.current > 0) {
+            // User had spoken, check silence duration
+            const silenceElapsed = now - lastSoundTimestampRef.current;
+            if (silenceElapsed > silenceTimeoutMs && !isFinalizingTurnRef.current) {
+              lastSoundTimestampRef.current = 0;
+              finalizeSpeechTurn();
+            }
+          }
+
+          animationFrameRef.current = requestAnimationFrame(updateLevelAndVAD);
         };
-        updateLevel();
+
+        animationFrameRef.current = requestAnimationFrame(updateLevelAndVAD);
       }
       return stream;
     } catch (e) {
       console.warn('Microphone stream access not granted or unavailable:', e);
       return null;
     }
-  }, []);
+  }, [silenceTimeoutMs, finalizeSpeechTurn]);
 
-  const clearSilenceTimer = () => {
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
-    }
-  };
-
-  const stopListening = useCallback(() => {
+  const stopListening = useCallback(async () => {
     isListeningRef.current = false;
-    clearSilenceTimer();
 
     // Stop native recognition
     if (recognitionRef.current) {
@@ -207,30 +288,23 @@ export function useSpeechRecognition({
       recognitionRef.current = null;
     }
 
-    // Stop MediaRecorder and trigger fallback if needed
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch {
-        // ignore
-      }
-    }
-
-    cleanupMicStream();
     setIsListening(false);
     onSpeechEnd?.();
 
-    // If no text was recognized yet, attempt backend audio transcription
-    setTimeout(() => {
-      processAudioFallback();
-    }, 200);
-  }, [cleanupMicStream, onSpeechEnd, processAudioFallback]);
+    // Finalize speech if user was talking
+    if (hasSpokenInTurnRef.current || audioChunksRef.current.length > 0 || activeTranscriptRef.current) {
+      await finalizeSpeechTurn();
+    }
+
+    cleanupMicStream();
+  }, [cleanupMicStream, onSpeechEnd, finalizeSpeechTurn]);
 
   const startListening = useCallback(async () => {
     setError(null);
-    clearSilenceTimer();
     activeTranscriptRef.current = '';
     audioChunksRef.current = [];
+    hasSpokenInTurnRef.current = false;
+    lastSoundTimestampRef.current = 0;
     setTranscript('');
     setInterimTranscript('');
     isListeningRef.current = true;
@@ -248,7 +322,7 @@ export function useSpeechRecognition({
     // Start audio backup recording
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'inactive') {
       try {
-        mediaRecorderRef.current.start(250);
+        mediaRecorderRef.current.start(200);
       } catch (e) {
         console.warn('Could not start MediaRecorder:', e);
       }
@@ -283,64 +357,46 @@ export function useSpeechRecognition({
             activeTranscriptRef.current += (activeTranscriptRef.current ? ' ' : '') + currentFinal.trim();
             setTranscript(activeTranscriptRef.current);
             onSpeechResult?.(activeTranscriptRef.current, true);
+            hasSpokenInTurnRef.current = true;
+            lastSoundTimestampRef.current = Date.now();
           }
 
           setInterimTranscript(currentInterim);
           if (currentInterim) {
             onSpeechResult?.(currentInterim, false);
-          }
-
-          // Handle silence in continuous mode
-          if (mode === 'continuous') {
-            clearSilenceTimer();
-            silenceTimerRef.current = window.setTimeout(() => {
-              const finalSpeech = activeTranscriptRef.current.trim() || currentInterim.trim();
-              if (finalSpeech) {
-                onFinalTranscript?.(finalSpeech);
-                activeTranscriptRef.current = '';
-                setTranscript('');
-                setInterimTranscript('');
-              }
-            }, silenceTimeoutMs);
+            hasSpokenInTurnRef.current = true;
+            lastSoundTimestampRef.current = Date.now();
           }
         };
 
         rec.onerror = (e: SpeechRecognitionErrorEventLike) => {
-          // If error occurs (e.g. Linux Chromium network error), fallback gracefully to MediaRecorder
+          // Native Web Speech error on Linux Chromium / Brave: gracefully fallback to MediaRecorder + VAD
           if (e.error !== 'no-speech') {
-            console.warn(`Browser Speech Recognition error: ${e.error}. Will fallback to backend Gemini transcription.`);
+            console.warn(`Native speech recognition error: ${e.error}. Using backend audio VAD transcription.`);
           }
         };
 
         rec.onend = () => {
           if (mode === 'continuous' && isListeningRef.current) {
-            // Restart recognition safely
             try {
               rec.start();
             } catch {
               // fallback remains active
             }
-          } else if (!isListeningRef.current) {
-            setIsListening(false);
-            cleanupMicStream();
           }
         };
 
         recognitionRef.current = rec;
         rec.start();
       } catch (e: unknown) {
-        console.warn('Native speech recognition failed to start, using MediaRecorder fallback:', e);
+        console.warn('Native speech recognition failed to start, using VAD + MediaRecorder:', e);
       }
-    } else {
-      console.info('Native SpeechRecognition unavailable, using MediaRecorder + Gemini STT.');
     }
-  }, [mode, silenceTimeoutMs, onSpeechStart, onSpeechResult, onFinalTranscript, initMicAudio, cleanupMicStream]);
+  }, [mode, onSpeechStart, onSpeechResult, initMicAudio]);
 
   // Push to talk release helper
   const handlePushToTalkEnd = useCallback(async () => {
     isListeningRef.current = false;
-    clearSilenceTimer();
-
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -350,33 +406,14 @@ export function useSpeechRecognition({
       recognitionRef.current = null;
     }
 
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch {
-        // ignore
-      }
-    }
-
-    cleanupMicStream();
     setIsListening(false);
     onSpeechEnd?.();
-
-    const finalSpeech = (activeTranscriptRef.current + ' ' + interimTranscript).trim();
-    if (finalSpeech) {
-      onFinalTranscript?.(finalSpeech);
-      activeTranscriptRef.current = '';
-      setTranscript('');
-      setInterimTranscript('');
-    } else {
-      // Trigger Gemini audio fallback
-      await processAudioFallback();
-    }
-  }, [cleanupMicStream, interimTranscript, onFinalTranscript, onSpeechEnd, processAudioFallback]);
+    await finalizeSpeechTurn();
+    cleanupMicStream();
+  }, [cleanupMicStream, onSpeechEnd, finalizeSpeechTurn]);
 
   useEffect(() => {
     return () => {
-      clearSilenceTimer();
       cleanupMicStream();
       if (recognitionRef.current) {
         try {
