@@ -12,8 +12,7 @@
       (function() {
         try {
           var theme = localStorage.getItem('vadivelu_theme');
-          var systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (theme === 'dark' || (!theme && systemDark) || (theme === 'system' && systemDark)) {
+          if (theme === 'dark') {
             document.documentElement.classList.add('dark');
             document.documentElement.setAttribute('data-theme', 'dark');
           } else {

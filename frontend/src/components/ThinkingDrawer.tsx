@@ -119,13 +119,19 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
   };
 
   return (
-    <aside
-      className={`shrink-0 w-84 sm:w-96 md:w-[460px] h-full border-l flex flex-col shadow-2xl transition-all duration-200 ease-in-out select-none animate-in slide-in-from-right duration-200 z-20 ${
-        isDarkTheme
-          ? 'bg-black text-white border-neutral-800'
-          : 'bg-white text-black border-neutral-200'
-      }`}
-    >
+    <>
+      {/* Mobile Backdrop Overlay for Thinking Drawer */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden animate-in fade-in duration-200"
+        onClick={onClose}
+      />
+      <aside
+        className={`fixed inset-y-0 right-0 z-50 md:relative md:z-auto w-full sm:w-96 md:w-[460px] h-full border-l flex flex-col shadow-2xl transition-all duration-200 ease-in-out select-none animate-in slide-in-from-right duration-200 ${
+          isDarkTheme
+            ? 'bg-black text-white border-neutral-800'
+            : 'bg-white text-black border-neutral-200'
+        }`}
+      >
       {/* 1. Top Header Bar (ChatGPT & Meta AI Style) */}
       <div className="h-14 px-5 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between shrink-0 bg-neutral-50/50 dark:bg-neutral-950/50">
         <div className="flex items-center gap-2.5">
@@ -527,5 +533,6 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
         </button>
       </div>
     </aside>
+    </>
   );
 };

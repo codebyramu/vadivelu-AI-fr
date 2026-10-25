@@ -117,7 +117,12 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   const [editTitle, setEditTitle] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 768;
+    }
+    return false;
+  });
 
   // Thinking Drawer State (ChatGPT / Meta AI style right-side panel)
   const [isThinkingOpen, setIsThinkingOpen] = useState(false);
@@ -295,11 +300,21 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
       </div>
 
       {/* Main App Container */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Sidebar */}
+      <div className="flex-1 flex overflow-hidden relative w-full">
+        {/* Mobile Backdrop Overlay */}
+        {isSidebarOpen && (
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 md:hidden animate-in fade-in duration-200"
+            onClick={() => setIsSidebarOpen(false)}
+          />
+        )}
+
+        {/* Left Sidebar (Slide-over drawer on mobile, side-by-side on desktop) */}
         <div
-          className={`bg-[#fafafa] dark:bg-black border-r border-neutral-200 dark:border-neutral-800 flex flex-col justify-between shrink-0 transition-all duration-300 ease-in-out ${
-            isSidebarOpen ? 'w-72 opacity-100' : 'w-0 opacity-0 border-r-0 pointer-events-none'
+          className={`fixed inset-y-0 left-0 z-50 md:relative md:z-auto bg-[#fafafa] dark:bg-black border-r border-neutral-200 dark:border-neutral-800 flex flex-col justify-between shrink-0 transition-all duration-300 ease-in-out shadow-2xl md:shadow-none ${
+            isSidebarOpen
+              ? 'translate-x-0 w-72 opacity-100'
+              : '-translate-x-full md:translate-x-0 md:w-0 opacity-0 md:border-r-0 pointer-events-none'
           }`}
         >
           <div className="p-4 flex flex-col min-h-0 flex-1 w-72">
@@ -307,6 +322,9 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
             <button
               onClick={() => {
                 onNewChat();
+                if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                  setIsSidebarOpen(false);
+                }
                 onShowToast?.('New chat started', 'sparkle');
               }}
               className="w-full flex items-center gap-2 px-4 py-2.5 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black active:scale-[0.98] rounded-full text-sm font-semibold shadow-sm transition"
@@ -331,7 +349,12 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                 return (
                   <div
                     key={conv.id}
-                    onClick={() => onSelectConversation(conv.id)}
+                    onClick={() => {
+                      onSelectConversation(conv.id);
+                      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+                        setIsSidebarOpen(false);
+                      }
+                    }}
                     className={`group relative flex items-center justify-between px-3 py-2.5 rounded-2xl text-sm transition cursor-pointer ${
                       isSelected
                         ? 'bg-neutral-200/80 dark:bg-neutral-900 text-black dark:text-white font-medium border border-neutral-300 dark:border-neutral-800'
@@ -445,12 +468,19 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col bg-white dark:bg-black min-w-0 transition-colors duration-150 relative">
+        <div className="flex-1 flex flex-col bg-white dark:bg-black min-w-0 w-full transition-colors duration-150 relative">
           {/* Main Chat Header */}
-          <div className="h-14 px-8 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between shrink-0 bg-white dark:bg-black">
-            {/* Title */}
-            <div className="flex items-center gap-3 min-w-0">
-              <h1 className="text-lg font-semibold text-black dark:text-white truncate">
+          <div className="h-14 px-3 sm:px-6 md:px-8 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between shrink-0 bg-white dark:bg-black">
+            {/* Title & Mobile Sidebar Toggle */}
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <button
+                onClick={() => setIsSidebarOpen(prev => !prev)}
+                className="p-1.5 -ml-1 rounded-lg text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition md:hidden"
+                title="Toggle conversation list"
+              >
+                <PanelLeft className="w-4 h-4" />
+              </button>
+              <h1 className="text-base sm:text-lg font-semibold text-black dark:text-white truncate">
                 {activeConversation?.title || 'New Chat'}
               </h1>
             </div>
@@ -500,7 +530,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
           {/* Info Modal Dropdown */}
           {showInfoModal && (
-            <div className="mx-8 mt-2 p-4 bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-2xl text-xs space-y-1.5 animate-in fade-in slide-in-from-top-1">
+            <div className="mx-3 sm:mx-6 md:mx-8 mt-2 p-4 bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-2xl text-xs space-y-1.5 animate-in fade-in slide-in-from-top-1">
               <div className="font-semibold text-black dark:text-white">Session Information</div>
               <p className="text-neutral-500 dark:text-neutral-400">
                 Persona: <span className="font-medium capitalize">{activeConversation?.personality || 'funny_friend'}</span> • Messages: {messages.length} • Powered by Gemini 3.5 Flash + Supabase Dialogues
@@ -509,7 +539,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
           )}
 
           {/* Messages Scroll Area */}
-          <div className="flex-1 overflow-y-auto px-8 pt-6 pb-36 space-y-6 bg-white dark:bg-black">
+          <div className="flex-1 overflow-y-auto px-3 sm:px-6 md:px-8 pt-4 sm:pt-6 pb-36 space-y-6 bg-white dark:bg-black">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto py-20 space-y-4 animate-in fade-in zoom-in-95 duration-200">
                 <div className="w-14 h-14 rounded-2xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
@@ -728,7 +758,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
           </div>
 
           {/* Bottom Clean Input Area (Image 1 style) */}
-          <div className="px-8 pb-3 pt-1 shrink-0 bg-white dark:bg-black">
+          <div className="px-3 sm:px-6 md:px-8 pb-3 pt-1 shrink-0 bg-white dark:bg-black">
             <form
               onSubmit={handleSubmit}
               className="relative max-w-4xl mx-auto bg-neutral-50 dark:bg-black border border-neutral-300 dark:border-neutral-800 rounded-full px-4 py-2.5 flex items-center gap-3 shadow-xs focus-within:border-black dark:focus-within:border-white transition-all"

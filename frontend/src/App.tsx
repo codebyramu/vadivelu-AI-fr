@@ -45,22 +45,18 @@ export const App: React.FC = () => {
   // Sending Message Loading Indicator
   const [isSendingMessage, setIsSendingMessage] = useState(false);
 
-  // Theme State & System Preference Tracking
+  // Theme State: Default to clean white/light theme as requested
   const [themeChoice, setThemeChoice] = useState<'light' | 'dark' | 'system'>(() => {
     const saved = localStorage.getItem('vadivelu_theme') as 'light' | 'dark' | 'system' | null;
-    return saved || 'system';
+    return saved || 'light';
   });
 
-  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(() => {
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    return false;
-  });
+  const [systemPrefersDark, setSystemPrefersDark] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    setSystemPrefersDark(mediaQuery.matches);
     const handler = (e: MediaQueryListEvent) => {
       setSystemPrefersDark(e.matches);
     };
@@ -68,7 +64,7 @@ export const App: React.FC = () => {
     return () => mediaQuery.removeEventListener('change', handler);
   }, []);
 
-  const isDark = themeChoice === 'system' ? systemPrefersDark : themeChoice === 'dark';
+  const isDark = themeChoice === 'dark' || (themeChoice === 'system' && systemPrefersDark);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -85,7 +81,7 @@ export const App: React.FC = () => {
   // Settings
   const [settings, setSettings] = useState<UserSettings>(() => {
     return {
-      geminiModel: 'gemini-2.5-flash',
+      geminiModel: 'gemini-flash-lite-latest',
       voiceGender: 'female',
       speakingRate: 1.0,
       speakingPitch: 1.0,
@@ -97,7 +93,7 @@ export const App: React.FC = () => {
       defaultPersonality: 'normal',
       memoryEnabled: true,
       autoSaveMemory: true,
-      theme: (localStorage.getItem('vadivelu_theme') as any) || 'system',
+      theme: (localStorage.getItem('vadivelu_theme') as any) || 'light',
       audioRetentionDays: 7,
     };
   });

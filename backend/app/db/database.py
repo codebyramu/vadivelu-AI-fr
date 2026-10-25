@@ -122,7 +122,7 @@ def seed_default_settings(conn: sqlite3.Connection) -> None:
         "default_personality": "normal",
         "memory_enabled": "true",
         "auto_save_memory": "true",
-        "theme": "dark",
+        "theme": "light",
         "audio_retention_days": "7",
     }
 

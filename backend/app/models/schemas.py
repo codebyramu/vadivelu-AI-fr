@@ -220,7 +220,7 @@ class UserSettings(BaseSchema):
     default_personality: PersonalityPreset = Field(default="normal", alias="defaultPersonality")
     memory_enabled: bool = Field(default=True, alias="memoryEnabled")
     auto_save_memory: bool = Field(default=True, alias="autoSaveMemory")
-    theme: Literal["light", "dark", "system"] = Field(default="dark", alias="theme")
+    theme: Literal["light", "dark", "system"] = Field(default="light", alias="theme")
     audio_retention_days: int = Field(default=7, alias="audioRetentionDays")
 
 
