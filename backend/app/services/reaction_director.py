@@ -182,14 +182,15 @@ class ReactionDirector:
         search_query_used: Optional[str] = None
         lower_msg = user_message.lower().strip()
 
-        # Check for YouTube search command
+        # Check for YouTube search command (handles 'search', 'searvh', typos, and direct commands)
         youtube_match = re.search(
-            r"(?:open\s+)?youtube(?:\s+in\s+the\s+(?:right\s+)?(?:side\s*bar|panel))?(?:\s+and\s+search(?:\s+for)?|\s+search(?:\s+for)?)\s+(.+)",
+            r"(?:open\s+)?youtube(?:\s+in\s+the\s+(?:right\s+)?(?:side\s*bar|panel))?(?:\s+(?:and\s+)?(?:search|searvh|find|look\s*up|for)\s+|\s+)(.+)",
             user_message,
             re.IGNORECASE,
         )
         if youtube_match:
             yt_term = youtube_match.group(1).strip().strip("'\"")
+            yt_term = re.sub(r"^for\s+", "", yt_term, flags=re.IGNORECASE).strip()
             search_query_used = yt_term
             browser_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(yt_term)}"
             try:
