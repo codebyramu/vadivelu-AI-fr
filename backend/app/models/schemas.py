@@ -49,11 +49,41 @@ class PauseSegment(BaseSchema):
 PerformanceSegment = Union[SpeechSegment, MemeSegment, PauseSegment]
 
 
+class ToolCallInfo(BaseSchema):
+    tool: str
+    query: Optional[str] = None
+    result_summary: Optional[str] = Field(default=None, alias="resultSummary")
+    items_count: Optional[int] = Field(default=None, alias="itemsCount")
+
+
+class CandidateDialoguePreview(BaseSchema):
+    id: str
+    line_text: Optional[str] = Field(default=None, alias="lineText")
+    line_translation: Optional[str] = Field(default=None, alias="lineTranslation")
+    relevance_score: Optional[float] = Field(default=None, alias="relevanceScore")
+    emotion: Optional[str] = None
+    tags: Optional[List[str]] = Field(default_factory=list)
+
+
+class ThoughtProcess(BaseSchema):
+    reasoning: Optional[str] = None
+    duration_ms: Optional[int] = Field(default=1200, alias="durationMs")
+    searches: Optional[List[str]] = Field(default_factory=list)
+    tools_called: Optional[List[ToolCallInfo]] = Field(default_factory=list, alias="toolsCalled")
+    memories_considered: Optional[List[str]] = Field(default_factory=list, alias="memoriesConsidered")
+    selected_dialogue_id: Optional[str] = Field(default=None, alias="selectedDialogueId")
+    selected_dialogue_title: Optional[str] = Field(default=None, alias="selectedDialogueTitle")
+    top_ranked_candidates: Optional[List[CandidateDialoguePreview]] = Field(
+        default_factory=list, alias="topRankedCandidates"
+    )
+
+
 class PerformancePlan(BaseSchema):
     voice: VoiceGender
     emotion: Optional[str] = "neutral"
     reasoning: Optional[str] = None
     segments: List[PerformanceSegment]
+    thought_process: Optional[ThoughtProcess] = Field(default=None, alias="thoughtProcess")
 
 
 class Message(BaseSchema):

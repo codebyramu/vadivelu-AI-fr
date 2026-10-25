@@ -10,8 +10,18 @@ import { CommandPalette } from './components/CommandPalette';
 import { MemeLibraryModal } from './components/MemeLibraryModal';
 import { MemoryModal } from './components/MemoryModal';
 import { SettingsModal } from './components/SettingsModal';
-import { InteractiveCursor } from './components/InteractiveCursor';
 import { ToastNotification, ToastItem, ToastType } from './components/ToastNotification';
+
+const getInitialConversationId = (): string => {
+  if (typeof window === 'undefined') return '';
+  const path = window.location.pathname;
+  const match = path.match(/^\/c\/([^/?#]+)/);
+  if (match && match[1] && match[1] !== 'new') {
+    return match[1];
+  }
+  const urlParams = new URLSearchParams(window.location.search);
+  return urlParams.get('c') || '';
+};
 
 export const App: React.FC = () => {
   // Views & Modals
@@ -95,10 +105,23 @@ export const App: React.FC = () => {
 
   // Conversations & Messages
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<string>('');
+  const [activeConversationId, setActiveConversationId] = useState<string>(() => getInitialConversationId());
   const [messages, setMessages] = useState<Message[]>([]);
   const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+
+  // Sync conversation selection with browser Back / Forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const urlId = getInitialConversationId();
+      setActiveConversationId(urlId);
+      if (!urlId) {
+        setMessages([]);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Audio Performance Controller
   const audioPerformance = useAudioPerformance({
@@ -121,8 +144,10 @@ export const App: React.FC = () => {
 
     api.getConversations().then(data => {
       setConversations(data);
-      if (data && data.length > 0) {
-        setActiveConversationId(data[0].id);
+      const urlId = getInitialConversationId();
+      // Only set active if URL specifically asked for that conversation
+      if (urlId && data && data.some(c => c.id === urlId)) {
+        setActiveConversationId(urlId);
       }
     }).catch(err => {
       console.warn('No initial conversations loaded:', err);
@@ -196,6 +221,9 @@ export const App: React.FC = () => {
         currentConvId = newConv.id;
         setActiveConversationId(newConv.id);
         setConversations(prev => [newConv, ...prev]);
+        if (typeof window !== 'undefined') {
+          window.history.pushState(null, '', `/c/${newConv.id}`);
+        }
       } catch (err: any) {
         console.error('Failed to create conversation:', err);
         return;
@@ -294,20 +322,26 @@ export const App: React.FC = () => {
     }
   }, [speechRecognition, audioPerformance]);
 
-  // New Chat handler: start empty!
-  const handleNewChat = useCallback(async () => {
-    try {
-      const newConv = await api.createConversation({
-        title: 'New Chat',
-        personality: settings.defaultPersonality,
-      });
-      setConversations(prev => [newConv, ...prev]);
-      setActiveConversationId(newConv.id);
-      setMessages([]);
-    } catch (e) {
-      console.error('Failed to create new chat:', e);
+  // Select conversation and sync browser URL to /c/:id
+  const handleSelectConversation = useCallback((id: string) => {
+    setActiveConversationId(id);
+    if (typeof window !== 'undefined') {
+      if (id) {
+        window.history.pushState(null, '', `/c/${id}`);
+      } else {
+        window.history.pushState(null, '', '/');
+      }
     }
-  }, [settings.defaultPersonality]);
+  }, []);
+
+  // New Chat handler: clean empty home screen with root URL / (like ChatGPT)
+  const handleNewChat = useCallback(() => {
+    setActiveConversationId('');
+    setMessages([]);
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', '/');
+    }
+  }, []);
 
   // Delete conversation
   const handleDeleteConversation = useCallback(async (id: string) => {
@@ -315,12 +349,15 @@ export const App: React.FC = () => {
       await api.deleteConversation(id);
       setConversations(prev => {
         const remaining = prev.filter(c => c.id !== id);
-        if (activeConversationId === id) {
-          const nextActive = remaining.length > 0 ? remaining[0].id : '';
-          setActiveConversationId(nextActive);
-        }
         return remaining;
       });
+      if (activeConversationId === id) {
+        setActiveConversationId('');
+        setMessages([]);
+        if (typeof window !== 'undefined') {
+          window.history.pushState(null, '', '/');
+        }
+      }
     } catch (e) {
       console.error('Failed to delete conversation:', e);
     }
@@ -380,7 +417,7 @@ export const App: React.FC = () => {
         <MainChatView
           conversations={conversations}
           activeConversationId={activeConversationId}
-          onSelectConversation={setActiveConversationId}
+          onSelectConversation={handleSelectConversation}
           onNewChat={handleNewChat}
           onDeleteConversation={handleDeleteConversation}
           onRenameConversation={handleRenameConversation}
@@ -447,7 +484,7 @@ export const App: React.FC = () => {
         conversations={conversations}
         activeConversationId={activeConversationId}
         onSelectConversation={id => {
-          setActiveConversationId(id);
+          handleSelectConversation(id);
           setIsCommandPaletteOpen(false);
         }}
         onNewChat={() => {
@@ -503,9 +540,6 @@ export const App: React.FC = () => {
         onSelectTheme={handleSelectTheme}
         onToggleTheme={handleToggleTheme}
       />
-
-      {/* Interactive Cursor with scale, blend mode and text badges */}
-      <InteractiveCursor isDarkTheme={isDark} />
 
       {/* Floating Apple-aesthetic Monochrome Toast Notifications */}
       <ToastNotification

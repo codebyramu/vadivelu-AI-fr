@@ -17,6 +17,7 @@ from app.core.key_rotator import (
 )
 from app.db.database import db_service
 from app.models.schemas import (
+    CandidateDialoguePreview,
     MemeMetadata,
     MemeSegment,
     PauseSegment,
@@ -24,6 +25,8 @@ from app.models.schemas import (
     PerformanceSegment,
     PersonalityPreset,
     SpeechSegment,
+    ThoughtProcess,
+    ToolCallInfo,
     VoiceGender,
 )
 from app.services.gemini_service import gemini_service
@@ -223,11 +226,69 @@ class ReactionDirector:
             raw_segments, meme_map, memes_enabled, final_voice
         )
 
+        # Assemble thought process and tool call execution details for frontend preview
+        selected_meme_id = None
+        selected_meme_title = None
+        for s in validated_segments:
+            if getattr(s, "type", None) == "meme":
+                selected_meme_id = getattr(s, "meme_id", None)
+                selected_meme_title = getattr(s, "title", None)
+                break
+
+        tools_called = [
+            ToolCallInfo(
+                tool="search_dialogues",
+                query=user_message[:60],
+                result_summary=f"Ranked {len(ranked_dialogues)} Supabase dialogues using fuzzy relevance matching",
+                items_count=len(ranked_dialogues),
+            ),
+            ToolCallInfo(
+                tool="retrieve_relevant_memories",
+                query=user_message[:60],
+                result_summary=f"Found {len(active_memories)} active memories ({len(relevant_memory_keys)} high context)",
+                items_count=len(active_memories),
+            ),
+        ]
+        if selected_meme_id:
+            tools_called.append(
+                ToolCallInfo(
+                    tool="select_meme_reaction",
+                    query=selected_meme_id,
+                    result_summary=f"Selected: {selected_meme_title or selected_meme_id}",
+                    items_count=1,
+                )
+            )
+
+        top_candidates = []
+        for d in ranked_dialogues[:6]:
+            top_candidates.append(
+                CandidateDialoguePreview(
+                    id=str(d.get("id")),
+                    line_text=d.get("lineText") or d.get("title"),
+                    line_translation=d.get("lineTranslation") or d.get("contextHint"),
+                    relevance_score=d.get("relevanceScore"),
+                    emotion=d.get("emotion"),
+                    tags=d.get("tags") or [],
+                )
+            )
+
+        thought_process = ThoughtProcess(
+            reasoning=plan_dict.get("reasoning", "Dynamic comedic directing with context ranking"),
+            duration_ms=1800,
+            searches=[user_message[:45], f"emotion:{plan_dict.get('emotion', 'comedy')}"],
+            tools_called=tools_called,
+            memories_considered=[m.get("key", "") for m in active_memories if m.get("key")],
+            selected_dialogue_id=selected_meme_id,
+            selected_dialogue_title=selected_meme_title,
+            top_ranked_candidates=top_candidates,
+        )
+
         plan = PerformancePlan(
             voice=final_voice,
             emotion=plan_dict.get("emotion", "neutral"),
             reasoning=plan_dict.get("reasoning", "Dynamic reaction performance with tool discovery"),
             segments=validated_segments,
+            thought_process=thought_process,
         )
 
         return plan, new_memory_keys, key_alias

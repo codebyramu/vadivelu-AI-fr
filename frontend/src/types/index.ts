@@ -23,11 +23,39 @@ export interface PauseSegment {
 
 export type PerformanceSegment = SpeechSegment | MemeSegment | PauseSegment;
 
+export interface ToolCallInfo {
+  tool: string;
+  query?: string;
+  resultSummary?: string;
+  itemsCount?: number;
+}
+
+export interface CandidateDialoguePreview {
+  id: string;
+  lineText?: string;
+  lineTranslation?: string;
+  relevanceScore?: number;
+  emotion?: string;
+  tags?: string[];
+}
+
+export interface ThoughtProcess {
+  reasoning?: string;
+  durationMs?: number;
+  searches?: string[];
+  toolsCalled?: ToolCallInfo[];
+  memoriesConsidered?: string[];
+  selectedDialogueId?: string;
+  selectedDialogueTitle?: string;
+  topRankedCandidates?: CandidateDialoguePreview[];
+}
+
 export interface PerformancePlan {
   voice: VoiceGender;
   emotion?: string;
   reasoning?: string;
   segments: PerformanceSegment[];
+  thoughtProcess?: ThoughtProcess;
 }
 
 export interface Message {
