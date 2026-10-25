@@ -102,9 +102,10 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
-  // Thinking Drawer State
+  // Thinking Drawer State (ChatGPT / Meta AI style right-side panel)
   const [isThinkingOpen, setIsThinkingOpen] = useState(false);
   const [activeThoughtProcess, setActiveThoughtProcess] = useState<ThoughtProcess | null>(null);
+  const [expandedInlineThoughtId, setExpandedInlineThoughtId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -152,13 +153,20 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
     setEditingConvId(null);
   };
 
-  // Toggle Thinking Drawer
-  const handleToggleThinking = (thought?: ThoughtProcess | null) => {
-    if (isThinkingOpen && (thought === activeThoughtProcess || (!thought && !activeThoughtProcess))) {
-      setIsThinkingOpen(false);
+  // Toggle Thinking Drawer & Inline Thought (ChatGPT / Meta AI style)
+  const handleToggleThinking = (msgId?: string, thought?: ThoughtProcess | null) => {
+    if (msgId) {
+      if (expandedInlineThoughtId === msgId && isThinkingOpen) {
+        setExpandedInlineThoughtId(null);
+        setIsThinkingOpen(false);
+      } else {
+        setExpandedInlineThoughtId(msgId);
+        setActiveThoughtProcess(thought || null);
+        setIsThinkingOpen(true);
+      }
     } else {
+      setIsThinkingOpen(prev => !prev);
       setActiveThoughtProcess(thought || null);
-      setIsThinkingOpen(true);
     }
   };
 
@@ -405,7 +413,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
           </div>
         </div>
 
-        {/* Thinking Process Left-Side Slide Drawer */}
+        {/* Thinking Process Right-Side Slide Drawer (ChatGPT / Meta AI style) */}
         <ThinkingDrawer
           isOpen={isThinkingOpen}
           onClose={() => setIsThinkingOpen(false)}
@@ -529,28 +537,57 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                     </div>
 
                     <div className="flex flex-col gap-2 min-w-0">
-                      {/* Thought Process Pill Button */}
+                      {/* ChatGPT / Meta AI Style Thought Button */}
                       {(thought || msg.performance?.reasoning) && (
-                        <button
-                          type="button"
-                          onClick={() => handleToggleThinking(thought || null)}
-                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-colors w-fit border ${
-                            isThinkingOpen && activeThoughtProcess === thought
-                              ? 'bg-black text-white dark:bg-white dark:text-black border-black dark:border-white shadow-xs'
-                              : 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800'
-                          }`}
-                          title="Click to view AI reasoning & tools called"
-                        >
-                          <Brain className="w-3 h-3" />
-                          <span>
-                            Thought process {thought?.toolsCalled?.length ? `(${thought.toolsCalled.length} tools)` : ''}
-                          </span>
-                          <ChevronDown
-                            className={`w-3 h-3 transition-transform duration-200 ${
-                              isThinkingOpen && activeThoughtProcess === thought ? 'rotate-180' : ''
+                        <div className="flex flex-col gap-1.5 w-fit max-w-full">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleThinking(msg.id, thought || null)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium transition-colors w-fit border ${
+                              isThinkingOpen && activeThoughtProcess === thought
+                                ? 'bg-black text-white dark:bg-white dark:text-black border-black dark:border-white shadow-xs'
+                                : 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border-neutral-200 dark:border-neutral-800'
                             }`}
-                          />
-                        </button>
+                            title="Click to view thinking in right panel"
+                          >
+                            <Brain className="w-3.5 h-3.5" />
+                            <span>
+                              {thought?.toolsCalled?.some(t => t.tool === 'select_meme_reaction')
+                                ? `Thought • Vadivelu reaction (${thought.toolsCalled.length} tools)`
+                                : `Thought for ${thought?.durationMs ? (thought.durationMs / 1000).toFixed(1) : '1.8'}s`}
+                            </span>
+                            <ChevronDown
+                              className={`w-3 h-3 transition-transform duration-200 ${
+                                (isThinkingOpen && activeThoughtProcess === thought) || expandedInlineThoughtId === msg.id
+                                  ? 'rotate-180'
+                                  : ''
+                              }`}
+                            />
+                          </button>
+
+                          {/* ChatGPT style clean inline collapsible thought text */}
+                          {expandedInlineThoughtId === msg.id && (
+                            <div className="pl-3.5 py-1 border-l-2 border-neutral-300 dark:border-neutral-700 text-[12px] text-neutral-500 dark:text-neutral-400 space-y-1 animate-in fade-in slide-in-from-top-1 duration-150">
+                              <p className="italic leading-relaxed text-neutral-700 dark:text-neutral-300">
+                                {thought?.reasoning || 'Evaluated conversation context and formulated optimal response.'}
+                              </p>
+                              <div className="flex items-center gap-2 text-[10.5px] text-neutral-400 pt-0.5">
+                                <span>{thought?.toolsCalled?.length ? `${thought.toolsCalled.length} tool calls` : 'Conversational response'}</span>
+                                <span>•</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setActiveThoughtProcess(thought || null);
+                                    setIsThinkingOpen(true);
+                                  }}
+                                  className="text-black dark:text-white font-medium hover:underline inline-flex items-center gap-1"
+                                >
+                                  Open right panel <ChevronRight className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       )}
 
                       {/* Message Bubble */}
@@ -640,17 +677,17 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                       <div className="flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-black dark:bg-white animate-ping" />
                         <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 tracking-tight">
-                          Vadivelu is preparing response…
+                          Thinking…
                         </span>
                       </div>
                       <button
                         type="button"
-                        onClick={() => handleToggleThinking(null)}
+                        onClick={() => handleToggleThinking(undefined, null)}
                         className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-black dark:text-white transition active:scale-95"
-                        title="Click to view live thinking & tools"
+                        title="Click to view live thinking & tools in right panel"
                       >
                         <Brain className="w-3 h-3" />
-                        <span>{isThinkingOpen ? 'Hide steps' : 'View steps'}</span>
+                        <span>{isThinkingOpen ? 'Hide thoughts' : 'View thoughts'}</span>
                       </button>
                     </div>
                     <div className="space-y-2">

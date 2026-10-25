@@ -49,10 +49,10 @@ class Settings:
     MEME_STORAGE_PATH: Path = BACKEND_DIR / "data" / "memes"
     CACHE_STORAGE_PATH: Path = BACKEND_DIR / "data" / "cache"
 
-    # Edge-TTS
+    # Edge-TTS Ultra-Natural Expressive Voices
     DEFAULT_VOICE_GENDER: str = os.getenv("DEFAULT_VOICE_GENDER", "female")
-    DEFAULT_MALE_VOICE: str = os.getenv("DEFAULT_MALE_VOICE", "en-US-ChristopherNeural")
-    DEFAULT_FEMALE_VOICE: str = os.getenv("DEFAULT_FEMALE_VOICE", "en-US-JennyNeural")
+    DEFAULT_MALE_VOICE: str = os.getenv("DEFAULT_MALE_VOICE", "en-US-AndrewMultilingualNeural")
+    DEFAULT_FEMALE_VOICE: str = os.getenv("DEFAULT_FEMALE_VOICE", "en-US-AvaMultilingualNeural")
 
     # Cooldowns and timeouts
     DEFAULT_MEME_COOLDOWN_SECONDS: int = 30

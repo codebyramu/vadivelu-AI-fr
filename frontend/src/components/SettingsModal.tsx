@@ -259,9 +259,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {activeTab === 'voice' && (
             <div className="space-y-5">
               <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-2">
-                  Assistant Voice Tone
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                    Assistant Voice Model (Ultra-Natural Neural)
+                  </label>
+                  <span className="text-[10px] text-neutral-400 font-mono">Edge-TTS Multilingual</span>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   {(['female', 'male'] as const).map(gender => {
                     const isSelected = localSettings.voiceGender === gender;
@@ -269,14 +272,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                       <button
                         key={gender}
                         onClick={() => handleVoiceGenderSelect(gender)}
-                        className={`p-3.5 rounded-2xl border text-sm font-semibold capitalize flex items-center justify-center gap-2 transition ${
+                        className={`p-3.5 rounded-2xl border text-left transition ${
                           isSelected
                             ? 'border-black dark:border-white bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white ring-1 ring-black dark:ring-white'
                             : 'border-neutral-200 dark:border-neutral-800 text-neutral-600 dark:text-neutral-300 hover:border-neutral-300 dark:hover:border-neutral-700 bg-white dark:bg-black'
                         }`}
                       >
-                        <UserCheck className="w-4 h-4" />
-                        <span>{gender === 'female' ? 'Natural Female Voice' : 'Natural Male Voice'}</span>
+                        <div className="flex items-center gap-2 mb-1">
+                          <UserCheck className="w-4 h-4" />
+                          <span className="font-semibold text-xs">
+                            {gender === 'female' ? 'Ava (Ultra-Natural Female)' : 'Andrew (Ultra-Natural Male)'}
+                          </span>
+                        </div>
+                        <p className="text-[10.5px] text-neutral-500 dark:text-neutral-400 leading-tight">
+                          {gender === 'female'
+                            ? 'Expressive, warm conversational neural voice'
+                            : 'Deep, crisp and natural human conversational tone'}
+                        </p>
                       </button>
                     );
                   })}

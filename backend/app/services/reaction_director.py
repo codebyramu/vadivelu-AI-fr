@@ -54,28 +54,27 @@ Directing Guidelines:
      * calm_supportive: Gentle, encouraging, comforting.
      * study_technical: Precise, clear, structured.
 
-2. TOP 15 CONTEXTUALLY RANKED VADIVELU DIALOGUES:
-   - You are provided with the Top 15 most contextually relevant Vadivelu dialogues from the Supabase soundboard, ranked using intelligent fuzzy matching, situation token overlap, and emotion weighting.
-   - When a user's context, victory, conflict, frustration, romance, or shock calls for a reaction, pick a fitting ID directly from these top 15 dialogues.
-   - Intelligently place the meme between your spoken speech segments (e.g. Speech -> Meme -> Speech or Speech -> Meme).
-   - If no meme fits or the situation is serious, do NOT force a meme; simply speak naturally.
-   - NEVER invent fake meme IDs. Only use authentic IDs from the provided catalog.
+2. INTELLIGENT COMEDIC TIMING (USE MEMES ONLY WHEN NEEDED, NOT ALWAYS):
+   - You have access to the Top 15 ranked Vadivelu dialogues from the Supabase database.
+   - **CRITICAL**: ONLY include a Vadivelu meme dialogue when there is an authentic comedic hook, humorous complaint, playful argument, celebration, dramatic exaggeration, boasting, or when the user explicitly asks for comedy/jokes.
+   - **WHEN NOT TO USE A MEME**: If the user is asking a straightforward question (e.g., general knowledge, coding, math, directions, how-to), having a calm greeting, or discussing serious/neutral topics, DO NOT insert any meme segment! Simply return natural, clear, engaging speech segments.
+   - True comedic timing means knowing WHEN to punch and when to speak naturally. Never force a meme dialogue on every single turn.
 
 3. CONTEXTUAL MEMORY CALLBACKS:
-   - Carefully inspect the RECALLED USER MEMORIES provided below.
-   - If the user's message touches on a personal topic (e.g. running/marathon training, pets, job, goals, fitness), WEAVE A NATURAL, WITTY CALLBACK into your spoken speech!
+   - Inspect the RECALLED USER MEMORIES provided below.
+   - When the user's message touches on a personal topic (e.g. running/marathon training, pets, job, goals, fitness), WEAVE A NATURAL, WITTY CALLBACK into your spoken speech!
    - Examples of callbacks: "With all that marathon training you've been putting in...", "Don't let your code bugs give you a headache!", "How is Bruno the dog doing today?"
 
 4. FINAL RESPONSE OUTPUT FORMAT:
    Return ONLY a strict JSON object with this exact schema:
    {
      "voice": "female" | "male",
-     "emotion": "celebration" | "shock" | "irony" | "laughter" | "awkward" | "calm" | "curious",
-     "reasoning": "brief director notes explaining tone and placement",
+     "emotion": "celebration" | "shock" | "irony" | "laughter" | "awkward" | "calm" | "curious" | "neutral",
+     "reasoning": "brief director notes explaining whether a meme was used or omitted and why",
      "segments": [
-       { "type": "speech", "text": "spoken part 1" },
-       { "type": "meme", "memeId": "valid_dialogue_id" },
-       { "type": "speech", "text": "spoken part 2" }
+       { "type": "speech", "text": "spoken part 1" }
+       // Optional: { "type": "meme", "memeId": "valid_dialogue_id" } ONLY when comedically appropriate!
+       // Optional: { "type": "speech", "text": "spoken part 2" }
      ],
      "newMemories": [
        { "key": "user_fact_key", "content": "description of fact" }
@@ -235,27 +234,41 @@ class ReactionDirector:
                 selected_meme_title = getattr(s, "title", None)
                 break
 
-        tools_called = [
-            ToolCallInfo(
-                tool="search_dialogues",
-                query=user_message[:60],
-                result_summary=f"Ranked {len(ranked_dialogues)} Supabase dialogues using fuzzy relevance matching",
-                items_count=len(ranked_dialogues),
-            ),
-            ToolCallInfo(
-                tool="retrieve_relevant_memories",
-                query=user_message[:60],
-                result_summary=f"Found {len(active_memories)} active memories ({len(relevant_memory_keys)} high context)",
-                items_count=len(active_memories),
-            ),
-        ]
+        tools_called = []
         if selected_meme_id:
+            tools_called.append(
+                ToolCallInfo(
+                    tool="search_dialogues",
+                    query=user_message[:60],
+                    result_summary=f"Evaluated Supabase dialogues catalog. Found comedic punchline match ({selected_meme_title or selected_meme_id})",
+                    items_count=len(ranked_dialogues),
+                )
+            )
             tools_called.append(
                 ToolCallInfo(
                     tool="select_meme_reaction",
                     query=selected_meme_id,
-                    result_summary=f"Selected: {selected_meme_title or selected_meme_id}",
+                    result_summary=f"Selected authentic dialogue: {selected_meme_title or selected_meme_id}",
                     items_count=1,
+                )
+            )
+        else:
+            tools_called.append(
+                ToolCallInfo(
+                    tool="intent_evaluator",
+                    query=user_message[:60],
+                    result_summary="Assessed user intent: natural conversational speech is preferred without meme insertion",
+                    items_count=0,
+                )
+            )
+
+        if active_memories:
+            tools_called.append(
+                ToolCallInfo(
+                    tool="retrieve_relevant_memories",
+                    query=user_message[:60],
+                    result_summary=f"Retrieved {len(active_memories)} contextual facts ({len(relevant_memory_keys)} high relevance)",
+                    items_count=len(active_memories),
                 )
             )
 
