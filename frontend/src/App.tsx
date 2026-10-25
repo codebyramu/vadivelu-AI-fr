@@ -3,6 +3,7 @@ import { Conversation, Message, UserSettings, PerformancePlan } from './types';
 import { api } from './services/api';
 import { useAudioPerformance } from './hooks/useAudioPerformance';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
+import { unlockAudioSync } from './services/audioUnlocker';
 import { MainChatView } from './components/MainChatView';
 import { VoiceModeView } from './components/VoiceModeView';
 import { CommandPalette } from './components/CommandPalette';
@@ -44,6 +45,22 @@ export const App: React.FC = () => {
 
   // Sending Message Loading Indicator
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+
+  // Auto-speak voice toggle: default to true so all responses speak Vadivelu audio!
+  const [autoSpeak, setAutoSpeak] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return localStorage.getItem('vadivelu_auto_speak') !== 'false';
+  });
+
+  const handleToggleAutoSpeak = useCallback(() => {
+    setAutoSpeak(prev => {
+      const next = !prev;
+      localStorage.setItem('vadivelu_auto_speak', String(next));
+      if (next) unlockAudioSync();
+      showToast(next ? 'Vadivelu Voice: Enabled 🔊' : 'Vadivelu Voice: Muted 🔇', 'audio');
+      return next;
+    });
+  }, [showToast]);
 
   // Theme State: Default to clean white/light theme as requested
   const [themeChoice, setThemeChoice] = useState<'light' | 'dark' | 'system'>(() => {
@@ -172,6 +189,9 @@ export const App: React.FC = () => {
 
   // Audio Playback for a given message
   const handlePlayMessageAudio = useCallback((message: Message) => {
+    // Unlock audio context synchronously inside direct click gesture
+    unlockAudioSync();
+
     if (playingMessageId === message.id && audioPerformance.isPlaying) {
       audioPerformance.interrupt();
       setPlayingMessageId(null);
@@ -198,6 +218,9 @@ export const App: React.FC = () => {
   // Handle message submission
   const handleSendMessage = useCallback(async (content: string) => {
     if (!content.trim()) return;
+
+    // Immediately trigger synchronous audio unlock on user send gesture
+    unlockAudioSync();
 
     // Interrupt any existing playing audio
     audioPerformance.interrupt();
@@ -263,8 +286,8 @@ export const App: React.FC = () => {
           .catch(() => {});
       }
 
-      // If in Voice Mode or Mini Voice Widget, auto-play response performance!
-      if ((isVoiceMode || isMiniVoiceOpen) && res.performance) {
+      // Auto-play response audio for ANY message when autoSpeak is on, or when in voice mode!
+      if (res.performance && (autoSpeak || isVoiceMode || isMiniVoiceOpen)) {
         setPlayingMessageId(res.assistantMessage.id);
         audioPerformance.playPerformance(res.performance);
       }
@@ -304,6 +327,7 @@ export const App: React.FC = () => {
 
   // Start In-Chat Voice Widget by default (matching Images 1 & 2)
   const handleStartInChatVoice = useCallback(() => {
+    unlockAudioSync();
     setIsVoiceMode(false);
     setIsMiniVoiceOpen(true);
     speechRecognition.startListening();
@@ -470,6 +494,10 @@ export const App: React.FC = () => {
           voiceInterimTranscript={speechRecognition.interimTranscript}
           isTranscribing={speechRecognition.isTranscribing}
           isSpeakingDetected={speechRecognition.isSpeakingDetected}
+          autoSpeak={autoSpeak}
+          onToggleAutoSpeak={handleToggleAutoSpeak}
+          autoplayBlocked={audioPerformance.autoplayBlocked}
+          onResumeBlockedPlayback={audioPerformance.resumeBlockedPlayback}
         />
       )}
 

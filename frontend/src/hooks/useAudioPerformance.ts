@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { PerformancePlan, PerformanceSegment, SpeechSegment, MemeSegment, VoiceGender } from '../types';
 import { api } from '../services/api';
+import { getGlobalAudioContext, unlockAudio } from '../services/audioUnlocker';
 
 export interface ActiveMemeInfo {
   memeId: string;
@@ -20,6 +21,7 @@ export function useAudioPerformance(options?: {
   defaultSpeechVolume?: number;
   defaultMemeVolume?: number;
   onFinished?: () => void;
+  onAutoplayBlocked?: (plan: PerformancePlan) => void;
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [status, setStatus] = useState<PlaybackStatus>('idle');
@@ -29,8 +31,9 @@ export function useAudioPerformance(options?: {
   const [totalSegments, setTotalSegments] = useState(0);
   const [speechVolume, setSpeechVolume] = useState(options?.defaultSpeechVolume ?? 0.9);
   const [memeVolume, setMemeVolume] = useState(options?.defaultMemeVolume ?? 1.0);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [pendingPlan, setPendingPlan] = useState<PerformancePlan | null>(null);
 
-  const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const isCancelledRef = useRef<boolean>(false);
@@ -51,26 +54,21 @@ export function useAudioPerformance(options?: {
     }
   }, [memeVolume, status]);
 
-  // Initialize Web Audio Context and AnalyserNode
+  // Retrieve global AudioContext and AnalyserNode
   const getAudioContextAndAnalyser = useCallback(() => {
-    if (!audioContextRef.current) {
-      const AudioCtx =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (AudioCtx) {
-        const ctx = new AudioCtx();
+    const ctx = getGlobalAudioContext();
+    if (ctx && !analyserRef.current) {
+      try {
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 256;
         analyser.smoothingTimeConstant = 0.8;
         analyser.connect(ctx.destination);
-        audioContextRef.current = ctx;
         analyserRef.current = analyser;
+      } catch (err) {
+        console.debug('Web Audio Analyser init:', err);
       }
     }
-    if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
-      audioContextRef.current.resume().catch(() => {});
-    }
-    return { ctx: audioContextRef.current, analyser: analyserRef.current };
+    return { ctx, analyser: analyserRef.current };
   }, []);
 
   // Stop / Interruption
@@ -93,6 +91,7 @@ export function useAudioPerformance(options?: {
     setActiveMeme(null);
     setCurrentSegment(null);
     setCurrentSegmentIndex(-1);
+    setAutoplayBlocked(false);
     setTimeout(() => {
       setStatus('idle');
     }, 150);
@@ -106,6 +105,9 @@ export function useAudioPerformance(options?: {
         return;
       }
       const audio = new Audio();
+      audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('webkit-playsinline', 'true');
+      (audio as any).playsInline = true;
       audio.crossOrigin = 'anonymous';
       audio.preload = 'auto';
       audio.volume = Math.max(0, Math.min(1, volume));
@@ -128,7 +130,7 @@ export function useAudioPerformance(options?: {
       audio.addEventListener('loadeddata', onReady, { once: true });
       audio.addEventListener('error', onError, { once: true });
 
-      // Timeout fallback in case canplaythrough takes too long
+      // 4-second timeout fallback
       setTimeout(() => done(audio), 4000);
 
       audio.src = url;
@@ -137,7 +139,11 @@ export function useAudioPerformance(options?: {
   }, []);
 
   // Play an already preloaded HTMLAudioElement and await completion
-  const playPreloadedAudio = useCallback((audio: HTMLAudioElement, volume: number): Promise<void> => {
+  const playPreloadedAudio = useCallback((
+    audio: HTMLAudioElement,
+    volume: number,
+    parentPlan?: PerformancePlan
+  ): Promise<void> => {
     return new Promise((resolve) => {
       if (isCancelledRef.current) {
         resolve();
@@ -147,14 +153,15 @@ export function useAudioPerformance(options?: {
       audio.volume = Math.max(0, Math.min(1, volume));
       activeAudioRef.current = audio;
 
-      // Connect to Web Audio Analyser
+      // Only route into Web Audio Analyser IF AudioContext is actually RUNNING.
+      // If it's suspended or on mobile devices, do NOT hijack direct speaker output!
       const { ctx, analyser } = getAudioContextAndAnalyser();
-      if (ctx && analyser) {
+      if (ctx && ctx.state === 'running' && analyser) {
         try {
           const source = ctx.createMediaElementSource(audio);
           source.connect(analyser);
         } catch {
-          // MediaElementSource already connected or CORS
+          // Already connected or CORS policy
         }
       }
 
@@ -179,12 +186,28 @@ export function useAudioPerformance(options?: {
       audio.addEventListener('ended', onEnded, { once: true });
       audio.addEventListener('error', onError, { once: true });
 
-      audio.play().catch(() => {
-        cleanup();
-        resolve();
-      });
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.warn('Audio play was rejected by browser policy:', err);
+          cleanup();
+          // Detect if autoplay was blocked by mobile browser
+          if (
+            err?.name === 'NotAllowedError' ||
+            err?.message?.toLowerCase().includes('interact') ||
+            err?.message?.toLowerCase().includes('user gesture')
+          ) {
+            setAutoplayBlocked(true);
+            if (parentPlan) {
+              setPendingPlan(parentPlan);
+              options?.onAutoplayBlocked?.(parentPlan);
+            }
+          }
+          resolve();
+        });
+      }
     });
-  }, [getAudioContextAndAnalyser]);
+  }, [getAudioContextAndAnalyser, options]);
 
   // Fallback TTS using browser Web Speech API if audio synthesis was completely offline
   const speakWithBrowserSpeech = useCallback((text: string, voiceGender: VoiceGender = 'female'): Promise<void> => {
@@ -221,22 +244,26 @@ export function useAudioPerformance(options?: {
     });
   }, []);
 
-  // Main playback executor: Preloads ALL assets first, then plays smoothly with ZERO gaps
+  // Main playback executor: Preloads assets, unlocks audio, and plays smoothly
   const playPerformance = useCallback(async (plan: PerformancePlan) => {
     // 1. Interrupt any ongoing playback
     interrupt();
     isCancelledRef.current = false;
+    setAutoplayBlocked(false);
 
     if (!plan || !plan.segments || plan.segments.length === 0) {
       return;
     }
 
+    // Try unlocking Web Audio context
+    await unlockAudio().catch(() => {});
+
     setIsPlaying(true);
-    setStatus('preparing'); // Displays "Preparing audio..." indicator
+    setStatus('preparing');
     setTotalSegments(plan.segments.length);
 
     // =========================================================================
-    // PHASE 1: PRELOAD ALL AUDIO IN ADVANCE (Parallel synthesis & audio loading)
+    // PHASE 1: PRELOAD ALL AUDIO IN ADVANCE
     // =========================================================================
     try {
       const preloadPromises: Promise<PreloadedItem>[] = plan.segments.map(async (seg) => {
@@ -278,13 +305,13 @@ export function useAudioPerformance(options?: {
         return { segment: seg, audio: null };
       });
 
-      // Wait until ALL audio assets are 100% prepared and ready before playing
+      // Wait until audio assets are ready
       const preloadedItems = await Promise.all(preloadPromises);
 
       if (isCancelledRef.current) return;
 
       // =========================================================================
-      // PHASE 2: SMOOTH SEQUENTIAL PLAYBACK (Speech → Meme → Speech with ZERO gaps)
+      // PHASE 2: SMOOTH SEQUENTIAL PLAYBACK
       // =========================================================================
       for (let i = 0; i < preloadedItems.length; i++) {
         if (isCancelledRef.current) break;
@@ -299,7 +326,7 @@ export function useAudioPerformance(options?: {
           setActiveMeme(null);
 
           if (item.audio) {
-            await playPreloadedAudio(item.audio, speechVolumeRef.current);
+            await playPreloadedAudio(item.audio, speechVolumeRef.current, plan);
           } else if (item.textToSpeakFallback) {
             const segVoice = (segment as SpeechSegment).voice || plan.voice;
             await speakWithBrowserSpeech(item.textToSpeakFallback, segVoice);
@@ -314,7 +341,7 @@ export function useAudioPerformance(options?: {
           });
 
           if (item.audio) {
-            await playPreloadedAudio(item.audio, memeVolumeRef.current);
+            await playPreloadedAudio(item.audio, memeVolumeRef.current, plan);
           } else {
             // Short delay if audio failed to load
             await new Promise((r) => setTimeout(r, memeSeg.durationMs || 1000));
@@ -338,6 +365,17 @@ export function useAudioPerformance(options?: {
     }
   }, [interrupt, preloadAudio, playPreloadedAudio, speakWithBrowserSpeech, options]);
 
+  // Resume playback on user tap when browser autoplay blocked it
+  const resumeBlockedPlayback = useCallback(async () => {
+    if (pendingPlan) {
+      setAutoplayBlocked(false);
+      const plan = pendingPlan;
+      setPendingPlan(null);
+      await unlockAudio().catch(() => {});
+      playPerformance(plan);
+    }
+  }, [pendingPlan, playPerformance]);
+
   return {
     isPlaying,
     status,
@@ -347,12 +385,14 @@ export function useAudioPerformance(options?: {
     totalSegments,
     speechVolume,
     memeVolume,
+    autoplayBlocked,
+    resumeBlockedPlayback,
     setSpeechVolume,
     setMemeVolume,
     playPerformance,
     interrupt,
     analyserNode: analyserRef.current,
-    audioContext: audioContextRef.current,
+    audioContext: getGlobalAudioContext(),
     getAudioContextAndAnalyser,
   };
 }

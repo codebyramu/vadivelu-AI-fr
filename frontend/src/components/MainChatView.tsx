@@ -71,6 +71,10 @@ interface MainChatViewProps {
   voiceInterimTranscript?: string;
   isTranscribing?: boolean;
   isSpeakingDetected?: boolean;
+  autoSpeak?: boolean;
+  onToggleAutoSpeak?: () => void;
+  autoplayBlocked?: boolean;
+  onResumeBlockedPlayback?: () => void;
 }
 
 export const MainChatView: React.FC<MainChatViewProps> = ({
@@ -109,6 +113,10 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   voiceInterimTranscript = '',
   isTranscribing = false,
   isSpeakingDetected = false,
+  autoSpeak = true,
+  onToggleAutoSpeak,
+  autoplayBlocked = false,
+  onResumeBlockedPlayback,
 }) => {
   const [inputText, setInputText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -499,9 +507,34 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                 </button>
               )}
 
+              {/* Voice Ready / Sound Toggle */}
+              {onToggleAutoSpeak && (
+                <button
+                  onClick={onToggleAutoSpeak}
+                  className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition active:scale-95 shadow-2xs ${
+                    autoSpeak
+                      ? 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-black dark:text-white border-neutral-300 dark:border-neutral-700'
+                      : 'bg-neutral-100/60 dark:bg-neutral-900/60 text-neutral-400 dark:text-neutral-500 border-neutral-200 dark:border-neutral-800'
+                  }`}
+                  title={autoSpeak ? 'Auto-Voice is ON (click to mute)' : 'Auto-Voice is MUTED (click to enable)'}
+                >
+                  {autoSpeak ? (
+                    <>
+                      <Volume2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
+                      <span>Sound ON</span>
+                    </>
+                  ) : (
+                    <>
+                      <VolumeX className="w-3.5 h-3.5 text-neutral-400" />
+                      <span>Sound Muted</span>
+                    </>
+                  )}
+                </button>
+              )}
+
               {/* Voice Ready Badge */}
-              <div className="flex items-center gap-1.5 text-xs font-medium text-black dark:text-white bg-neutral-100 dark:bg-neutral-900 px-2.5 py-1 rounded-full border border-neutral-200 dark:border-neutral-800 shadow-2xs">
-                <span className="w-2 h-2 rounded-full bg-black dark:bg-white animate-pulse" />
+              <div className="hidden sm:flex items-center gap-1.5 text-xs font-medium text-black dark:text-white bg-neutral-100 dark:bg-neutral-900 px-2.5 py-1 rounded-full border border-neutral-200 dark:border-neutral-800 shadow-2xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Voice ready</span>
               </div>
 
@@ -687,25 +720,25 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                           )}
                         </button>
 
-                        {/* Read Aloud Button */}
+                        {/* Read Aloud / Play Voice Button */}
                         <button
                           onClick={() => onPlayMessageAudio(msg)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition active:scale-95 ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition active:scale-95 shadow-2xs ${
                             isPlayingThis
-                              ? 'bg-black text-white dark:bg-white dark:text-black shadow-xs'
-                              : 'hover:bg-neutral-200/60 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300'
+                              ? 'bg-black text-white dark:bg-white dark:text-black ring-2 ring-neutral-400'
+                              : 'bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-black dark:text-white border border-neutral-300 dark:border-neutral-700'
                           }`}
-                          title="Perform speech & meme audio"
+                          title="Play Vadivelu speech & comedy punchline"
                         >
                           {isPlayingThis ? (
                             <>
-                              <VolumeX className="w-3.5 h-3.5 animate-pulse" />
-                              <span>Stop</span>
+                              <VolumeX className="w-3.5 h-3.5 animate-pulse text-amber-500" />
+                              <span>Stop speaking</span>
                             </>
                           ) : (
                             <>
-                              <Volume2 className="w-3.5 h-3.5" />
-                              <span>Read aloud</span>
+                              <Volume2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                              <span>Listen 🔊</span>
                             </>
                           )}
                         </button>
@@ -759,6 +792,20 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
           {/* Bottom Clean Input Area (Image 1 style) */}
           <div className="px-3 sm:px-6 md:px-8 pb-3 pt-1 shrink-0 bg-white dark:bg-black">
+            {/* Mobile Browser Autoplay Prompt (Tap to play sound) */}
+            {autoplayBlocked && onResumeBlockedPlayback && (
+              <div className="flex justify-center mb-2">
+                <button
+                  type="button"
+                  onClick={onResumeBlockedPlayback}
+                  className="bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-100 dark:text-black px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-xs font-semibold animate-bounce ring-4 ring-neutral-400/30 transition active:scale-95"
+                >
+                  <Volume2 className="w-4 h-4 text-emerald-400 dark:text-emerald-600 animate-pulse" />
+                  <span>Tap here to hear Vadivelu speak 🔊</span>
+                </button>
+              </div>
+            )}
+
             <form
               onSubmit={handleSubmit}
               className="relative max-w-4xl mx-auto bg-neutral-50 dark:bg-black border border-neutral-300 dark:border-neutral-800 rounded-full px-4 py-2.5 flex items-center gap-3 shadow-xs focus-within:border-black dark:focus-within:border-white transition-all"
