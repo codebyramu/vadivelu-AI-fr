@@ -18,6 +18,7 @@ from app.core.key_rotator import (
 from app.db.database import db_service
 from app.models.schemas import (
     CandidateDialoguePreview,
+    FetchedPageInfo,
     MemeMetadata,
     MemeSegment,
     PauseSegment,
@@ -28,12 +29,14 @@ from app.models.schemas import (
     ThoughtProcess,
     ToolCallInfo,
     VoiceGender,
+    WebSearchResult,
 )
 from app.services.gemini_service import gemini_service
 from app.services.meme_service import meme_service
 from app.services.memory_service import memory_service
 from app.services.tool_service import tool_registry
 from app.services.tts_service import get_cache_key, resolve_voice, tts_service
+from app.services.web_search_service import web_search_service
 
 logger = logging.getLogger("vadivelu.director")
 
@@ -182,13 +185,110 @@ class ReactionDirector:
             active_memories, relevant_keys=relevant_memory_keys
         )
 
+        # 1. Check for URL link inspection (e.g. "what's this link bro: https://en.wikipedia.org/...")
+        url_match = re.search(r"https?://[^\s]+", user_message)
+        fetched_page_data: Optional[Dict[str, Any]] = None
+        if url_match:
+            raw_url = url_match.group(0).rstrip(".,)>\"'")
+            try:
+                fetched_page_data = await web_search_service.fetch_webpage(raw_url)
+            except Exception as e:
+                logger.warning(f"Failed to fetch webpage {raw_url}: {e}")
+
+        # 2. Check for web search triggers (e.g. "search for latest news", "who is the champion of...")
+        web_search_results: List[Dict[str, Any]] = []
+        search_query_used: Optional[str] = None
+        lower_msg = user_message.lower().strip()
+        search_triggers = [
+            "search", "google", "look up", "who is", "who won", "what happened",
+            "latest news", "latest score", "current champion", "tell me about",
+        ]
+        is_search_intent = any(trigger in lower_msg for trigger in search_triggers) and len(user_message.split()) >= 2
+
+        if is_search_intent and not url_match:
+            clean_search_query = re.sub(
+                r"^(please\s+)?(search\s+(for\s+)?|look\s+up\s+|who\s+is\s+|what\s+is\s+|tell\s+me\s+about\s+)",
+                "",
+                user_message,
+                flags=re.IGNORECASE,
+            ).strip()
+            if not clean_search_query:
+                clean_search_query = user_message
+            search_query_used = clean_search_query
+            try:
+                web_search_results = await web_search_service.search_web(clean_search_query, max_results=5)
+            except Exception as e:
+                logger.warning(f"Web search failed for query '{clean_search_query}': {e}")
+
+        # 3. Check for live weather query
+        weather_info: Optional[Dict[str, Any]] = None
+        if "weather" in lower_msg or "temperature" in lower_msg or "forecast" in lower_msg:
+            loc_match = re.search(r"(?:in|at|for)\s+([a-zA-Z\s]+)", user_message, re.IGNORECASE)
+            loc = loc_match.group(1).strip() if loc_match else "Chennai"
+            try:
+                weather_info = await web_search_service.lookup_weather(loc)
+            except Exception as e:
+                logger.warning(f"Weather lookup failed: {e}")
+
+        # 4. Check for math calculation query
+        math_info: Optional[Dict[str, Any]] = None
+        if any(sym in user_message for sym in ["+", "*", "/", "sqrt", "% of", "^"]) and re.search(r"\d+", user_message):
+            math_expr = re.sub(r"[^0-9\+\-\*\/\^\(\)\.\s]|(\b(?:sqrt|sin|cos|tan|log|pi|e)\b)", r"\1", user_message)
+            if math_expr.strip():
+                try:
+                    math_info = web_search_service.calculate_math(math_expr.strip())
+                except Exception as e:
+                    logger.warning(f"Math calculation failed: {e}")
+
+        # Build Real-Time Tool Context for Gemini
+        realtime_tool_blocks = []
+        if fetched_page_data and fetched_page_data.get("status") == 200:
+            realtime_tool_blocks.append(
+                f"--- WEBPAGE CONTENT INSPECTED BY IN-APP BROWSER TOOL ---\n"
+                f"URL: {fetched_page_data.get('url')}\n"
+                f"Title: {fetched_page_data.get('title')}\n"
+                f"Domain: {fetched_page_data.get('domain')}\n"
+                f"Page Excerpt:\n{fetched_page_data.get('content', '')[:2500]}\n"
+                f"---------------------------------------------------------"
+            )
+        if web_search_results:
+            results_bullets = "\n".join(
+                [f"• [{r.get('title')}]({r.get('url')}): {r.get('snippet')}" for r in web_search_results[:4]]
+            )
+            realtime_tool_blocks.append(
+                f"--- LIVE WEB SEARCH RESULTS (Query: '{search_query_used}') ---\n"
+                f"{results_bullets}\n"
+                f"----------------------------------------------------------------"
+            )
+        if weather_info and "error" not in weather_info:
+            realtime_tool_blocks.append(
+                f"--- REAL-TIME WEATHER REPORT ---\n"
+                f"Location: {weather_info.get('location')}\n"
+                f"Condition: {weather_info.get('condition')}\n"
+                f"Temperature: {weather_info.get('temp_c')}°C ({weather_info.get('temp_f')}°F)\n"
+                f"Humidity: {weather_info.get('humidity')}\n"
+                f"Wind: {weather_info.get('wind_speed_kmph')} km/h\n"
+                f"--------------------------------"
+            )
+        if math_info and math_info.get("status") == "success":
+            realtime_tool_blocks.append(
+                f"--- MATHEMATICAL EVALUATION RESULT ---\n"
+                f"Expression: {math_info.get('expression')} = {math_info.get('result')}\n"
+                f"--------------------------------------"
+            )
+
+        realtime_context_str = "\n\n".join(realtime_tool_blocks)
+        if realtime_context_str:
+            realtime_context_str = f"\n\nREAL-TIME ULTRA TOOLS EXECUTION DATA:\n{realtime_context_str}\n(Ground your dialogue and commentary with these real facts and humorous observations!)"
+
         system_instruction = (
             f"{DIRECTOR_SYSTEM_PROMPT}\n\n"
             f"Active Personality Preset: {personality}\n"
             f"Default Voice Tone: {default_voice}\n"
             f"Memes Enabled Status: {'YES' if memes_enabled else 'DISABLED by user settings'}\n\n"
             f"{memories_text}\n\n"
-            f"{dialogues_catalog_text}\n"
+            f"{dialogues_catalog_text}"
+            f"{realtime_context_str}\n"
         )
 
         # Build contents from recent history + new message
@@ -248,6 +348,51 @@ class ReactionDirector:
                 break
 
         tools_called = []
+
+        # If a webpage link was fetched
+        if fetched_page_data:
+            tools_called.append(
+                ToolCallInfo(
+                    tool="fetch_webpage",
+                    query=fetched_page_data.get("url", "")[:60],
+                    result_summary=f"Read {fetched_page_data.get('domain', 'link')} ({fetched_page_data.get('title', '')}) - {fetched_page_data.get('length', 0)} chars",
+                    items_count=1,
+                )
+            )
+
+        # If web search was executed
+        if web_search_results:
+            tools_called.append(
+                ToolCallInfo(
+                    tool="web_search",
+                    query=search_query_used or user_message[:60],
+                    result_summary=f"Browsed live web. Found {len(web_search_results)} relevant sources for '{search_query_used}'",
+                    items_count=len(web_search_results),
+                )
+            )
+
+        # If weather was looked up
+        if weather_info and "error" not in weather_info:
+            tools_called.append(
+                ToolCallInfo(
+                    tool="lookup_weather",
+                    query=weather_info.get("location", ""),
+                    result_summary=f"{weather_info.get('location')}: {weather_info.get('temp_c')}°C, {weather_info.get('condition')}",
+                    items_count=1,
+                )
+            )
+
+        # If math was evaluated
+        if math_info and math_info.get("status") == "success":
+            tools_called.append(
+                ToolCallInfo(
+                    tool="calculate_math",
+                    query=math_info.get("expression", ""),
+                    result_summary=f"{math_info.get('expression')} = {math_info.get('result')}",
+                    items_count=1,
+                )
+            )
+
         if selected_meme_id:
             tools_called.append(
                 ToolCallInfo(
@@ -307,6 +452,9 @@ class ReactionDirector:
             selected_dialogue_id=selected_meme_id,
             selected_dialogue_title=selected_meme_title,
             top_ranked_candidates=top_candidates,
+            web_results=[WebSearchResult(**r) for r in web_search_results] if web_search_results else [],
+            fetched_page=FetchedPageInfo(**fetched_page_data) if fetched_page_data else None,
+            search_query=search_query_used,
         )
 
         plan = PerformancePlan(

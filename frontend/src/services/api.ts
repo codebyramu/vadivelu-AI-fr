@@ -247,4 +247,18 @@ export const api = {
     }
     return await res.json();
   },
+
+  // Audio Speech Transcription via Backend Gemini
+  async transcribeAudio(audioBlob: Blob): Promise<{ transcript: string; status: string }> {
+    const formData = new FormData();
+    formData.append('file', audioBlob, 'recording.webm');
+    const res = await fetch(`${API_BASE}/chat/transcribe`, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) {
+      return { transcript: '', status: 'error' };
+    }
+    return await res.json();
+  },
 };

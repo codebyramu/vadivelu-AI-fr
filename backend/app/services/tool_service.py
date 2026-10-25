@@ -1,7 +1,7 @@
 """Tool Registry and Execution Engine for Gemini function calling.
 
-Allows Gemini to inspect available memes, query memories, and intelligently select
-reactions based on real database records. Designed to be extensible for future tools.
+Allows Gemini to inspect available memes, query memories, search the live web,
+fetch webpage contents/links, check weather, and calculate math expressions.
 """
 
 import json
@@ -10,6 +10,7 @@ from typing import Any, Callable, Coroutine, Dict, List, Optional
 
 from app.services.meme_service import meme_service
 from app.services.memory_service import memory_service
+from app.services.web_search_service import web_search_service
 
 logger = logging.getLogger("vadivelu.tools")
 
@@ -54,6 +55,62 @@ TOOL_DECLARATIONS = [
             },
         },
     },
+    {
+        "name": "web_search",
+        "description": "Performs a live web search for real-time information, news, current events, sports scores, celebrities, movies, or general knowledge.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {
+                    "type": "STRING",
+                    "description": "The search query (e.g. 'latest tech news', 'who won the marathon', 'Vadivelu latest movie').",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "fetch_webpage",
+        "description": "Fetches and reads the body content and title of any URL or link shared by the user.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "url": {
+                    "type": "STRING",
+                    "description": "The full HTTP/HTTPS URL of the webpage to read (e.g. 'https://en.wikipedia.org/wiki/Vadivelu').",
+                },
+            },
+            "required": ["url"],
+        },
+    },
+    {
+        "name": "lookup_weather",
+        "description": "Retrieves current real-time weather and temperature for any city or location.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "location": {
+                    "type": "STRING",
+                    "description": "City or location name (e.g. 'Chennai', 'Madurai', 'London', 'New York').",
+                },
+            },
+            "required": ["location"],
+        },
+    },
+    {
+        "name": "calculate_math",
+        "description": "Safely evaluates math expressions, percentages, unit conversions, or arithmetic.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "expression": {
+                    "type": "STRING",
+                    "description": "Mathematical expression to evaluate (e.g. '25 * 14', 'sqrt(144) + 12', '15% of 850').",
+                },
+            },
+            "required": ["expression"],
+        },
+    },
 ]
 
 
@@ -68,6 +125,10 @@ class ToolRegistry:
         self._tools["search_meme_library"] = self._search_memes
         self._tools["list_available_memes"] = self._list_available_memes
         self._tools["lookup_user_memories"] = self._lookup_memories
+        self._tools["web_search"] = self._web_search
+        self._tools["fetch_webpage"] = self._fetch_webpage
+        self._tools["lookup_weather"] = self._lookup_weather
+        self._tools["calculate_math"] = self._calculate_math
 
     def register_tool(
         self, name: str, func: Callable[..., Coroutine[Any, Any, Any]]
@@ -129,6 +190,22 @@ class ToolRegistry:
     async def _lookup_memories(self, topic: Optional[str] = None) -> List[Dict[str, Any]]:
         """Tool handler: look up user memories."""
         return await memory_service.list_memories(search=topic, active_only=True)
+
+    async def _web_search(self, query: str) -> List[Dict[str, Any]]:
+        """Tool handler: search the live web."""
+        return await web_search_service.search_web(query=query, max_results=5)
+
+    async def _fetch_webpage(self, url: str) -> Dict[str, Any]:
+        """Tool handler: fetch and read webpage contents."""
+        return await web_search_service.fetch_webpage(url=url)
+
+    async def _lookup_weather(self, location: str) -> Dict[str, Any]:
+        """Tool handler: lookup current weather."""
+        return await web_search_service.lookup_weather(location=location)
+
+    async def _calculate_math(self, expression: str) -> Dict[str, Any]:
+        """Tool handler: calculate math expression."""
+        return web_search_service.calculate_math(expression=expression)
 
 
 tool_registry = ToolRegistry()

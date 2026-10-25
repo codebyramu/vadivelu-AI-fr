@@ -1069,3 +1069,41 @@ class TestMemoryRetrievalAndContextCallbacks:
             assert enriched[0].audio_url != enriched[1].audio_url
 
         asyncio.run(run())
+
+    def test_web_search_math_weather_tools(self):
+        async def run():
+            from app.services.web_search_service import web_search_service
+            from app.services.tool_service import tool_registry
+
+            # Test safe math
+            math_res = web_search_service.calculate_math("sqrt(100) * 5 + 12")
+            assert math_res["status"] == "success"
+            assert math_res["result"] == 62
+
+            # Test tool registry
+            math_tool_res = await tool_registry.execute_tool("calculate_math", {"expression": "25 * 4"})
+            assert math_tool_res["result"]["result"] == 100
+
+            # Test weather lookup
+            weather_tool_res = await tool_registry.execute_tool("lookup_weather", {"location": "Chennai"})
+            assert "result" in weather_tool_res
+            assert "location" in weather_tool_res["result"]
+
+        asyncio.run(run())
+
+    def test_transcribe_audio_endpoint(self):
+        from fastapi.testclient import TestClient
+        from app.main import app
+        from app.services.web_search_service import web_search_service
+
+        client = TestClient(app)
+        with patch.object(web_search_service, "transcribe_audio", return_value="hello vadivelu"):
+            # Send dummy audio bytes
+            response = client.post(
+                "/api/chat/transcribe",
+                files={"file": ("test.webm", b"RIFFdummydataaudio", "audio/webm")}
+            )
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "success"
+            assert data["transcript"] == "hello vadivelu"

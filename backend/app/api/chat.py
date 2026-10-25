@@ -1,6 +1,6 @@
 """Chat messaging and Reaction Director orchestration endpoint."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
 from app.core.key_rotator import (
     AllKeysInCooldownError,
@@ -14,8 +14,21 @@ from app.models.schemas import (
     SendMessageResponse,
 )
 from app.services.reaction_director import reaction_director
+from app.services.web_search_service import web_search_service
 
 router = APIRouter(prefix="/api/chat", tags=["Chat"])
+
+
+@router.post("/transcribe")
+async def transcribe_audio_recording(file: UploadFile = File(...)):
+    """Accurately transcribes spoken user audio (webm, wav, ogg) using Gemini 3.5 Flash."""
+    try:
+        audio_bytes = await file.read()
+        mime_type = file.content_type or "audio/webm"
+        transcript = await web_search_service.transcribe_audio(audio_bytes, mime_type=mime_type)
+        return {"transcript": transcript, "status": "success"}
+    except Exception as e:
+        return {"transcript": "", "error": str(e), "status": "error"}
 
 
 @router.post("/message", response_model=SendMessageResponse)

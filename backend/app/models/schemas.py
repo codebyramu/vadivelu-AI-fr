@@ -66,6 +66,21 @@ class CandidateDialoguePreview(BaseSchema):
     tags: Optional[List[str]] = Field(default_factory=list)
 
 
+class WebSearchResult(BaseSchema):
+    title: str
+    url: str
+    snippet: str
+    domain: Optional[str] = None
+
+
+class FetchedPageInfo(BaseSchema):
+    url: str
+    title: str
+    domain: Optional[str] = None
+    content: Optional[str] = None
+    status: Optional[int] = 200
+
+
 class ThoughtProcess(BaseSchema):
     reasoning: Optional[str] = None
     duration_ms: Optional[int] = Field(default=1200, alias="durationMs")
@@ -77,6 +92,9 @@ class ThoughtProcess(BaseSchema):
     top_ranked_candidates: Optional[List[CandidateDialoguePreview]] = Field(
         default_factory=list, alias="topRankedCandidates"
     )
+    web_results: Optional[List[WebSearchResult]] = Field(default_factory=list, alias="webResults")
+    fetched_page: Optional[FetchedPageInfo] = Field(default=None, alias="fetchedPage")
+    search_query: Optional[str] = Field(default=None, alias="searchQuery")
 
 
 class PerformancePlan(BaseSchema):

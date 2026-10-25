@@ -40,6 +40,21 @@ export interface CandidateDialoguePreview {
   tags?: string[];
 }
 
+export interface WebSearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+  domain?: string;
+}
+
+export interface FetchedPageInfo {
+  url: string;
+  title: string;
+  domain?: string;
+  content?: string;
+  status?: number;
+}
+
 export interface ThoughtProcess {
   reasoning?: string;
   durationMs?: number;
@@ -49,6 +64,9 @@ export interface ThoughtProcess {
   selectedDialogueId?: string;
   selectedDialogueTitle?: string;
   topRankedCandidates?: CandidateDialoguePreview[];
+  webResults?: WebSearchResult[];
+  fetchedPage?: FetchedPageInfo;
+  searchQuery?: string;
 }
 
 export interface PerformancePlan {

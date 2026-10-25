@@ -1,5 +1,24 @@
-import React from 'react';
-import { X, Sparkles, Search, Database, Brain, Film, Volume2, ChevronRight, CheckCircle2, Clock, Terminal, ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  X,
+  Sparkles,
+  Search,
+  Database,
+  Brain,
+  Film,
+  Volume2,
+  ChevronRight,
+  CheckCircle2,
+  Clock,
+  Terminal,
+  ArrowRight,
+  Globe,
+  ExternalLink,
+  BookOpen,
+  CloudSun,
+  Calculator,
+  Compass,
+} from 'lucide-react';
 import { ThoughtProcess } from '../types';
 
 interface ThinkingDrawerProps {
@@ -19,15 +38,19 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
   activePrompt = '',
   isDarkTheme = false,
 }) => {
+  const [activeTab, setActiveTab] = useState<'all' | 'browser' | 'reasoning'>('all');
+
   if (!isOpen) return null;
 
   const hasTools = thoughtProcess?.toolsCalled && thoughtProcess.toolsCalled.length > 0;
   const hasCandidates = thoughtProcess?.topRankedCandidates && thoughtProcess.topRankedCandidates.length > 0;
   const hasMemories = thoughtProcess?.memoriesConsidered && thoughtProcess.memoriesConsidered.length > 0;
+  const hasWebResults = thoughtProcess?.webResults && thoughtProcess.webResults.length > 0;
+  const hasFetchedPage = !!thoughtProcess?.fetchedPage;
 
   return (
     <aside
-      className={`shrink-0 w-80 sm:w-96 md:w-[410px] h-full border-l flex flex-col shadow-lg transition-all duration-200 ease-in-out select-none animate-in slide-in-from-right duration-200 z-20 ${
+      className={`shrink-0 w-80 sm:w-96 md:w-[420px] h-full border-l flex flex-col shadow-2xl transition-all duration-200 ease-in-out select-none animate-in slide-in-from-right duration-200 z-20 ${
         isDarkTheme
           ? 'bg-black text-white border-neutral-800'
           : 'bg-white text-black border-neutral-200'
@@ -51,7 +74,7 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
               )}
             </div>
             <div className="text-[10px] text-neutral-400">
-              Vadivelu Director • Gemini 3.5
+              Vadivelu Director • Ultra Tools & Live Web
             </div>
           </div>
         </div>
@@ -73,12 +96,12 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
             <div className="flex items-center justify-between text-[11px] font-semibold text-black dark:text-white">
               <span className="flex items-center gap-2">
                 <Sparkles className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '3s' }} />
-                <span>Evaluating intent & tools...</span>
+                <span>Executing Ultra Tools & Strategy...</span>
               </span>
               <span className="text-[10px] font-mono text-neutral-400">live</span>
             </div>
             <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-              Analyzing prompt context, checking long-term memory, and determining if a Vadivelu punchline is comedically fitting or if natural speech is best.
+              Evaluating user intent, searching live web data, checking memories, and orchestrating comedic dialogue reactions.
             </p>
           </div>
         )}
@@ -94,12 +117,110 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
           </div>
         </div>
 
-        {/* 2. Tool Calls & Database Queries */}
+        {/* 2. In-App Web Browser & Search Results (Inspired by vadivelu-browser-app) */}
+        {(hasWebResults || hasFetchedPage || thoughtProcess?.searchQuery) && (
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+              <span className="flex items-center gap-1.5">
+                <Globe className="w-3.5 h-3.5 text-black dark:text-white" />
+                <span>Web Search & Browsed Links</span>
+              </span>
+              <span className="text-[9.5px] font-mono px-1.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-400">
+                in-app browser
+              </span>
+            </div>
+
+            {/* Browser Search Capsule (matching vadivelu-browser-app home.html style) */}
+            <div className="p-3 rounded-2xl bg-neutral-900 border border-neutral-800 text-white space-y-2.5 shadow-sm">
+              <div className="flex items-center gap-2 text-xs text-neutral-300 bg-black/60 px-3 py-1.5 rounded-xl border border-neutral-800/80">
+                <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                <span className="truncate font-mono text-[11px]">
+                  {thoughtProcess?.searchQuery || thoughtProcess?.fetchedPage?.url || 'Live Web Inspection'}
+                </span>
+              </div>
+
+              {/* Quick Link Shortcuts */}
+              <div className="flex items-center gap-1.5 text-[10px] text-neutral-400">
+                <span className="font-semibold text-neutral-500 uppercase tracking-wider text-[9px]">Sources:</span>
+                <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300">DuckDuckGo</span>
+                <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300">Wikipedia</span>
+                <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300">Live Web</span>
+              </div>
+            </div>
+
+            {/* Fetched Webpage In-App Reader Card */}
+            {hasFetchedPage && thoughtProcess?.fetchedPage && (
+              <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-black dark:text-white">
+                    <BookOpen className="w-3.5 h-3.5 text-neutral-500" />
+                    <span>In-App Link Reader</span>
+                  </div>
+                  <a
+                    href={thoughtProcess.fetchedPage.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[10px] font-medium text-neutral-500 hover:text-black dark:hover:text-white transition"
+                  >
+                    <span>Open URL</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="text-[12px] font-medium text-black dark:text-white leading-snug">
+                  {thoughtProcess.fetchedPage.title}
+                </div>
+                <div className="text-[11px] text-neutral-500 dark:text-neutral-400 line-clamp-4 leading-relaxed font-normal bg-white/50 dark:bg-black/50 p-2.5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/50">
+                  {thoughtProcess.fetchedPage.content || 'Content extracted and analyzed.'}
+                </div>
+              </div>
+            )}
+
+            {/* Web Search Result Cards */}
+            {hasWebResults && (
+              <div className="space-y-2">
+                {thoughtProcess!.webResults!.map((result, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 hover:border-black dark:hover:border-white transition-all space-y-1.5 group"
+                  >
+                    <div className="flex items-center justify-between text-[10px] text-neutral-400">
+                      <span className="font-mono text-neutral-500 uppercase">{result.domain || 'web'}</span>
+                      <a
+                        href={result.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-black dark:text-white font-medium transition"
+                      >
+                        <span>Visit</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    </div>
+                    <a
+                      href={result.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-[12px] font-semibold text-black dark:text-white hover:underline leading-snug line-clamp-1"
+                    >
+                      {result.title}
+                    </a>
+                    {result.snippet && (
+                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400 line-clamp-2 leading-relaxed">
+                        {result.snippet}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 3. Tool Calls & Database Queries */}
         <div className="space-y-2">
           <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
             <span className="flex items-center gap-1.5">
               <Terminal className="w-3.5 h-3.5" />
-              <span>Tools & DB Actions</span>
+              <span>Ultra Tools & DB Actions</span>
             </span>
             <span className="text-[10px] font-mono lowercase">
               {thoughtProcess?.toolsCalled?.length || 0} executed
@@ -115,7 +236,15 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
                 >
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="font-mono font-semibold text-black dark:text-white flex items-center gap-1.5">
-                      {tool.tool.includes('dialogue') ? (
+                      {tool.tool.includes('web_search') ? (
+                        <Globe className="w-3 h-3 text-neutral-500" />
+                      ) : tool.tool.includes('fetch_webpage') ? (
+                        <BookOpen className="w-3 h-3 text-neutral-500" />
+                      ) : tool.tool.includes('lookup_weather') ? (
+                        <CloudSun className="w-3 h-3 text-neutral-500" />
+                      ) : tool.tool.includes('calculate') ? (
+                        <Calculator className="w-3 h-3 text-neutral-500" />
+                      ) : tool.tool.includes('dialogue') ? (
                         <Search className="w-3 h-3 text-neutral-500" />
                       ) : tool.tool.includes('memory') ? (
                         <Brain className="w-3 h-3 text-neutral-500" />
@@ -154,7 +283,7 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
           </div>
         </div>
 
-        {/* 3. Long-term Memories Recalled */}
+        {/* 4. Long-term Memories Recalled */}
         {hasMemories && (
           <div className="space-y-1.5">
             <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
@@ -174,7 +303,7 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
           </div>
         )}
 
-        {/* 4. Evaluated Dialogue Candidates (If DB search was performed) */}
+        {/* 5. Evaluated Dialogue Candidates (If DB search was performed) */}
         {hasCandidates && (
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
