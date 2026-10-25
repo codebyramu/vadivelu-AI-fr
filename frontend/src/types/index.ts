@@ -67,6 +67,7 @@ export interface ThoughtProcess {
   webResults?: WebSearchResult[];
   fetchedPage?: FetchedPageInfo;
   searchQuery?: string;
+  browserUrl?: string;
 }
 
 export interface PerformancePlan {

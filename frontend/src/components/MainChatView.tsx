@@ -133,6 +133,20 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isSendingMessage]);
 
+  // Auto-open side panel when assistant responds with a browser/search preview action
+  useEffect(() => {
+    if (messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      if (
+        lastMsg.role === 'assistant' &&
+        lastMsg.performance?.thoughtProcess?.browserUrl
+      ) {
+        setActiveThoughtProcess(lastMsg.performance.thoughtProcess);
+        setIsThinkingOpen(true);
+      }
+    }
+  }, [messages]);
+
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputText.trim() || isSendingMessage) return;

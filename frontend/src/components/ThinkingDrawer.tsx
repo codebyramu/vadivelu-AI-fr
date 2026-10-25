@@ -1,23 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   Sparkles,
   Search,
-  Database,
   Brain,
-  Film,
-  Volume2,
-  ChevronRight,
-  CheckCircle2,
-  Clock,
-  Terminal,
-  ArrowRight,
   Globe,
   ExternalLink,
   BookOpen,
   CloudSun,
   Calculator,
-  Compass,
+  Play,
+  RotateCw,
+  Film,
+  ArrowRight,
 } from 'lucide-react';
 import { ThoughtProcess } from '../types';
 
@@ -38,336 +33,476 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
   activePrompt = '',
   isDarkTheme = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'all' | 'browser' | 'reasoning'>('all');
+  const hasBrowserAction = !!(
+    thoughtProcess?.browserUrl ||
+    (thoughtProcess?.webResults && thoughtProcess.webResults.length > 0) ||
+    thoughtProcess?.fetchedPage ||
+    thoughtProcess?.searchQuery
+  );
+
+  const [activeTab, setActiveTab] = useState<'thought' | 'browser'>('thought');
+  const [customUrl, setCustomUrl] = useState('');
+  const [activeBrowserUrl, setActiveBrowserUrl] = useState('');
+
+  // Switch tab and sync browser URL when new thoughtProcess arrives
+  useEffect(() => {
+    if (hasBrowserAction) {
+      setActiveTab('browser');
+      const url =
+        thoughtProcess?.browserUrl ||
+        thoughtProcess?.fetchedPage?.url ||
+        (thoughtProcess?.searchQuery
+          ? `https://www.youtube.com/results?search_query=${encodeURIComponent(thoughtProcess.searchQuery)}`
+          : 'https://duckduckgo.com');
+      setActiveBrowserUrl(url);
+      setCustomUrl(url);
+    } else {
+      setActiveTab('thought');
+    }
+  }, [thoughtProcess, hasBrowserAction]);
 
   if (!isOpen) return null;
 
   const hasTools = thoughtProcess?.toolsCalled && thoughtProcess.toolsCalled.length > 0;
-  const hasCandidates = thoughtProcess?.topRankedCandidates && thoughtProcess.topRankedCandidates.length > 0;
-  const hasMemories = thoughtProcess?.memoriesConsidered && thoughtProcess.memoriesConsidered.length > 0;
   const hasWebResults = thoughtProcess?.webResults && thoughtProcess.webResults.length > 0;
   const hasFetchedPage = !!thoughtProcess?.fetchedPage;
+  const isYouTube =
+    activeBrowserUrl.includes('youtube.com') ||
+    (thoughtProcess?.searchQuery && thoughtProcess.searchQuery.toLowerCase().includes('youtube')) ||
+    (thoughtProcess?.reasoning && thoughtProcess.reasoning.toLowerCase().includes('youtube'));
+
+  // Extract YouTube search query if applicable
+  let ytQuery = thoughtProcess?.searchQuery || '';
+  if (!ytQuery && activeBrowserUrl.includes('search_query=')) {
+    try {
+      const parsed = new URL(activeBrowserUrl);
+      ytQuery = parsed.searchParams.get('search_query') || '';
+    } catch {
+      ytQuery = '';
+    }
+  }
+
+  const handleNavigate = (url: string) => {
+    let clean = url.trim();
+    if (!clean) return;
+    if (!clean.startsWith('http://') && !clean.startsWith('https://')) {
+      if (clean.includes('.') && !clean.includes(' ')) {
+        clean = 'https://' + clean;
+      } else {
+        clean = `https://duckduckgo.com/?q=${encodeURIComponent(clean)}`;
+      }
+    }
+    setActiveBrowserUrl(clean);
+    setCustomUrl(clean);
+  };
 
   return (
     <aside
-      className={`shrink-0 w-80 sm:w-96 md:w-[420px] h-full border-l flex flex-col shadow-2xl transition-all duration-200 ease-in-out select-none animate-in slide-in-from-right duration-200 z-20 ${
+      className={`shrink-0 w-80 sm:w-96 md:w-[440px] h-full border-l flex flex-col shadow-2xl transition-all duration-200 ease-in-out select-none animate-in slide-in-from-right duration-200 z-20 ${
         isDarkTheme
           ? 'bg-black text-white border-neutral-800'
           : 'bg-white text-black border-neutral-200'
       }`}
     >
-      {/* Header — ChatGPT / Meta AI Style */}
-      <div className="h-14 px-5 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-xl bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 text-black dark:text-white flex items-center justify-center shadow-xs">
-            <Brain className="w-4 h-4" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold tracking-tight text-black dark:text-white flex items-center gap-1.5">
-              <span>Thinking Process</span>
-              {isSendingMessage ? (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              ) : (
-                <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-500">
-                  {thoughtProcess?.durationMs ? `${(thoughtProcess.durationMs / 1000).toFixed(1)}s` : 'completed'}
-                </span>
-              )}
-            </div>
-            <div className="text-[10px] text-neutral-400">
-              Vadivelu Director • Ultra Tools & Live Web
-            </div>
-          </div>
+      {/* 1. Header with Clean Tab Bar (ChatGPT & Meta AI Style) */}
+      <div className="h-14 px-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between shrink-0 bg-neutral-50/50 dark:bg-neutral-950/50">
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-1 bg-neutral-200/60 dark:bg-neutral-900 p-1 rounded-xl">
+          <button
+            onClick={() => setActiveTab('thought')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+              activeTab === 'thought'
+                ? 'bg-white dark:bg-black text-black dark:text-white shadow-xs'
+                : 'text-neutral-500 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Brain className="w-3.5 h-3.5" />
+            <span>Thinking</span>
+            {thoughtProcess?.durationMs && (
+              <span className="text-[10px] font-mono text-neutral-400">
+                {(thoughtProcess.durationMs / 1000).toFixed(1)}s
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('browser')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition relative ${
+              activeTab === 'browser'
+                ? 'bg-white dark:bg-black text-black dark:text-white shadow-xs'
+                : 'text-neutral-500 hover:text-black dark:hover:text-white'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>Browser Preview</span>
+            {hasBrowserAction && (
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            )}
+          </button>
         </div>
 
+        {/* Close Button */}
         <button
           onClick={onClose}
-          className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-900 text-neutral-400 hover:text-black dark:hover:text-white transition active:scale-95"
-          title="Collapse thinking panel"
+          className="p-1.5 rounded-xl hover:bg-neutral-200/60 dark:hover:bg-neutral-900 text-neutral-400 hover:text-black dark:hover:text-white transition active:scale-95"
+          title="Close panel"
         >
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      {/* Content Area */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs">
-        {/* Active Generation Status Bar (Meta AI style) */}
-        {isSendingMessage && (
-          <div className="p-3.5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-semibold text-black dark:text-white">
-              <span className="flex items-center gap-2">
-                <Sparkles className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '3s' }} />
-                <span>Executing Ultra Tools & Strategy...</span>
-              </span>
-              <span className="text-[10px] font-mono text-neutral-400">live</span>
-            </div>
-            <p className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed">
-              Evaluating user intent, searching live web data, checking memories, and orchestrating comedic dialogue reactions.
-            </p>
-          </div>
-        )}
-
-        {/* 1. Internal Reasoning Steps (ChatGPT Style Quote Block) */}
-        <div className="space-y-2">
-          <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Reasoning & Strategy</span>
-          </div>
-          <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 border-l-2 border-l-black dark:border-l-white text-[12px] leading-relaxed text-neutral-700 dark:text-neutral-300">
-            {thoughtProcess?.reasoning || (isSendingMessage ? 'Formulating response strategy with natural comedic timing...' : 'Generated a direct conversational response without unnecessary meme insertion.')}
-          </div>
-        </div>
-
-        {/* 2. In-App Web Browser & Search Results (Inspired by vadivelu-browser-app) */}
-        {(hasWebResults || hasFetchedPage || thoughtProcess?.searchQuery) && (
-          <div className="space-y-2.5">
-            <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
-              <span className="flex items-center gap-1.5">
-                <Globe className="w-3.5 h-3.5 text-black dark:text-white" />
-                <span>Web Search & Browsed Links</span>
-              </span>
-              <span className="text-[9.5px] font-mono px-1.5 py-0.5 rounded-full bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 text-neutral-400">
-                in-app browser
-              </span>
-            </div>
-
-            {/* Browser Search Capsule (matching vadivelu-browser-app home.html style) */}
-            <div className="p-3 rounded-2xl bg-neutral-900 border border-neutral-800 text-white space-y-2.5 shadow-sm">
-              <div className="flex items-center gap-2 text-xs text-neutral-300 bg-black/60 px-3 py-1.5 rounded-xl border border-neutral-800/80">
-                <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                <span className="truncate font-mono text-[11px]">
-                  {thoughtProcess?.searchQuery || thoughtProcess?.fetchedPage?.url || 'Live Web Inspection'}
-                </span>
+      {/* 2. Main Content Area */}
+      <div className="flex-1 overflow-y-auto">
+        {/* ================= TAB A: CLEAN CHATGPT / META AI THINKING ================= */}
+        {activeTab === 'thought' && (
+          <div className="p-5 space-y-5 text-xs leading-relaxed">
+            {/* Live generation pulse */}
+            {isSendingMessage && (
+              <div className="p-3.5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950 space-y-1.5">
+                <div className="flex items-center gap-2 text-[11px] font-semibold text-black dark:text-white">
+                  <Sparkles className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '3s' }} />
+                  <span>Thinking & processing request...</span>
+                </div>
+                <p className="text-[11px] text-neutral-500 dark:text-neutral-400">
+                  Formulating response, evaluating tools, and verifying natural tone.
+                </p>
               </div>
+            )}
 
-              {/* Quick Link Shortcuts */}
-              <div className="flex items-center gap-1.5 text-[10px] text-neutral-400">
-                <span className="font-semibold text-neutral-500 uppercase tracking-wider text-[9px]">Sources:</span>
-                <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300">DuckDuckGo</span>
-                <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300">Wikipedia</span>
-                <span className="px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300">Live Web</span>
+            {/* Clean Thought Block (ChatGPT Style) */}
+            <div className="space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <Brain className="w-3.5 h-3.5" />
+                <span>Thought Summary</span>
+              </div>
+              <div className="p-4 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-[12.5px] leading-relaxed text-neutral-700 dark:text-neutral-300 whitespace-pre-line">
+                {thoughtProcess?.reasoning ||
+                  (isSendingMessage
+                    ? 'Understanding user prompt and formulating response strategy...'
+                    : 'Delivered direct conversational response without requiring additional database searches.')}
               </div>
             </div>
 
-            {/* Fetched Webpage In-App Reader Card */}
-            {hasFetchedPage && thoughtProcess?.fetchedPage && (
-              <div className="p-3.5 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-black dark:text-white">
-                    <BookOpen className="w-3.5 h-3.5 text-neutral-500" />
-                    <span>In-App Link Reader</span>
-                  </div>
-                  <a
-                    href={thoughtProcess.fetchedPage.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[10px] font-medium text-neutral-500 hover:text-black dark:hover:text-white transition"
-                  >
-                    <span>Open URL</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+            {/* Actions Taken / Tools Executed (Clean modern chips) */}
+            {hasTools && (
+              <div className="space-y-2.5">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+                  Actions Taken
                 </div>
-                <div className="text-[12px] font-medium text-black dark:text-white leading-snug">
-                  {thoughtProcess.fetchedPage.title}
-                </div>
-                <div className="text-[11px] text-neutral-500 dark:text-neutral-400 line-clamp-4 leading-relaxed font-normal bg-white/50 dark:bg-black/50 p-2.5 rounded-xl border border-neutral-200/50 dark:border-neutral-800/50">
-                  {thoughtProcess.fetchedPage.content || 'Content extracted and analyzed.'}
+                <div className="space-y-2">
+                  {thoughtProcess!.toolsCalled!.map((tool, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 flex items-start justify-between gap-3"
+                    >
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 text-[11px] font-semibold text-black dark:text-white">
+                          {tool.tool.includes('browser') || tool.tool.includes('web') ? (
+                            <Globe className="w-3.5 h-3.5 text-blue-500" />
+                          ) : tool.tool.includes('weather') ? (
+                            <CloudSun className="w-3.5 h-3.5 text-amber-500" />
+                          ) : tool.tool.includes('math') ? (
+                            <Calculator className="w-3.5 h-3.5 text-emerald-500" />
+                          ) : tool.tool.includes('meme') ? (
+                            <Film className="w-3.5 h-3.5 text-purple-500" />
+                          ) : (
+                            <Sparkles className="w-3.5 h-3.5 text-neutral-400" />
+                          )}
+                          <span className="capitalize">{tool.tool.replace(/_/g, ' ')}</span>
+                        </div>
+                        {tool.resultSummary && (
+                          <div className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-snug">
+                            {tool.resultSummary}
+                          </div>
+                        )}
+                      </div>
+
+                      {(tool.tool.includes('browser') || tool.tool.includes('web')) && (
+                        <button
+                          onClick={() => setActiveTab('browser')}
+                          className="shrink-0 p-1.5 text-[10px] font-semibold text-neutral-600 dark:text-neutral-300 hover:text-black dark:hover:text-white flex items-center gap-1 hover:underline"
+                        >
+                          <span>View Preview</span>
+                          <ArrowRight className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* Web Search Result Cards */}
-            {hasWebResults && (
-              <div className="space-y-2">
-                {thoughtProcess!.webResults!.map((result, idx) => (
-                  <div
-                    key={idx}
-                    className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 hover:border-black dark:hover:border-white transition-all space-y-1.5 group"
+            {/* Selected Audio Dialogue (Clean badge ONLY when an authentic dialogue was played) */}
+            {thoughtProcess?.selectedDialogueTitle && (
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                  <Film className="w-3.5 h-3.5" />
+                  <span>Dialogue Reaction Attached</span>
+                </div>
+                <div className="p-3 rounded-2xl bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 text-[12px] font-medium text-black dark:text-white flex items-center gap-2">
+                  <Play className="w-3.5 h-3.5 fill-current shrink-0" />
+                  <span className="line-clamp-2">"{thoughtProcess.selectedDialogueTitle}"</span>
+                </div>
+              </div>
+            )}
+
+            {/* Memories Recalled (Only if meaningful facts were recalled) */}
+            {thoughtProcess?.memoriesConsidered && thoughtProcess.memoriesConsidered.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+                  Contextual Memories Recalled
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {thoughtProcess.memoriesConsidered.map((key, i) => (
+                    <span
+                      key={i}
+                      className="px-2.5 py-1 rounded-full text-[10px] font-medium bg-neutral-100 dark:bg-neutral-900 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-800"
+                    >
+                      #{key}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= TAB B: LIVE IN-APP BROWSER & PREVIEW ================= */}
+        {activeTab === 'browser' && (
+          <div className="flex flex-col h-full bg-neutral-950 text-white select-text">
+            {/* In-App Browser Address Bar (matching vadivelu-browser-app) */}
+            <div className="p-3 border-b border-neutral-800 bg-neutral-900 flex flex-col gap-2 shrink-0">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleNavigate(customUrl);
+                }}
+                className="flex items-center gap-2 bg-black/70 border border-neutral-700/80 rounded-xl px-2.5 py-1.5 focus-within:border-white transition"
+              >
+                <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                <input
+                  type="text"
+                  value={customUrl}
+                  onChange={(e) => setCustomUrl(e.target.value)}
+                  placeholder="Enter URL or search query..."
+                  className="flex-1 bg-transparent border-none outline-none text-[11px] text-white font-mono placeholder-neutral-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleNavigate(customUrl)}
+                  className="p-1 rounded text-neutral-400 hover:text-white transition"
+                  title="Reload"
+                >
+                  <RotateCw className="w-3 h-3" />
+                </button>
+                {activeBrowserUrl && (
+                  <a
+                    href={activeBrowserUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1 rounded text-neutral-400 hover:text-white transition"
+                    title="Open in new window"
                   >
-                    <div className="flex items-center justify-between text-[10px] text-neutral-400">
-                      <span className="font-mono text-neutral-500 uppercase">{result.domain || 'web'}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </form>
+
+              {/* Quick Navigation Shortcuts (from vadivelu-browser-app) */}
+              <div className="flex items-center gap-1.5 overflow-x-auto text-[10px] pb-0.5">
+                <button
+                  onClick={() =>
+                    handleNavigate(
+                      `https://www.youtube.com/results?search_query=${encodeURIComponent(ytQuery || 'whats AI')}`
+                    )
+                  }
+                  className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 flex items-center gap-1 transition shrink-0"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  <span>YouTube</span>
+                </button>
+                <button
+                  onClick={() => handleNavigate('https://www.google.com/')}
+                  className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 flex items-center gap-1 transition shrink-0"
+                >
+                  <span>Google</span>
+                </button>
+                <button
+                  onClick={() => handleNavigate('https://github.com/codebyramu')}
+                  className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 flex items-center gap-1 transition shrink-0"
+                >
+                  <span>GitHub</span>
+                </button>
+                <button
+                  onClick={() => handleNavigate('https://en.wikipedia.org/')}
+                  className="px-2 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 flex items-center gap-1 transition shrink-0"
+                >
+                  <span>Wikipedia</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Live Preview Display Canvas */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* YouTube Live Embed & Video Results */}
+              {isYouTube ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-neutral-300 flex items-center gap-1.5">
+                      <Play className="w-3.5 h-3.5 text-red-500 fill-current" />
+                      <span>YouTube Search Preview</span>
+                    </span>
+                    <a
+                      href={
+                        activeBrowserUrl ||
+                        `https://www.youtube.com/results?search_query=${encodeURIComponent(ytQuery || 'whats AI')}`
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-red-400 hover:underline flex items-center gap-1"
+                    >
+                      <span>Open in YouTube</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+
+                  {/* Embedded YouTube search player frame */}
+                  <div className="w-full aspect-video rounded-2xl overflow-hidden border border-neutral-800 bg-black shadow-lg">
+                    <iframe
+                      src={`https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(
+                        ytQuery || 'whats AI'
+                      )}`}
+                      title="YouTube Preview"
+                      className="w-full h-full border-0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                    />
+                  </div>
+
+                  {/* Web results / Video search cards */}
+                  {hasWebResults && (
+                    <div className="space-y-2 pt-2">
+                      <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                        Search Matches
+                      </div>
+                      {thoughtProcess!.webResults!.map((result, idx) => (
+                        <a
+                          key={idx}
+                          href={result.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-3 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-neutral-600 transition group space-y-1"
+                        >
+                          <div className="text-[10px] text-neutral-400 font-mono">
+                            {result.domain || 'youtube.com'}
+                          </div>
+                          <div className="text-xs font-medium text-white group-hover:text-red-400 leading-snug line-clamp-2">
+                            {result.title}
+                          </div>
+                          {result.snippet && (
+                            <p className="text-[11px] text-neutral-400 line-clamp-2 leading-relaxed">
+                              {result.snippet}
+                            </p>
+                          )}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : hasFetchedPage && thoughtProcess?.fetchedPage ? (
+                /* In-App Web Reader for Articles / Links */
+                <div className="space-y-3">
+                  <div className="p-4 rounded-2xl bg-neutral-900 border border-neutral-800 space-y-3">
+                    <div className="flex items-center justify-between text-xs text-neutral-400 border-b border-neutral-800 pb-2">
+                      <div className="flex items-center gap-1.5 font-semibold text-white">
+                        <BookOpen className="w-3.5 h-3.5 text-blue-400" />
+                        <span>In-App Article Reader</span>
+                      </div>
+                      <a
+                        href={thoughtProcess.fetchedPage.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-neutral-400 hover:text-white transition flex items-center gap-1"
+                      >
+                        <span>Full Page</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+
+                    <div className="text-sm font-semibold text-white leading-snug">
+                      {thoughtProcess.fetchedPage.title}
+                    </div>
+
+                    <div className="text-xs text-neutral-300 leading-relaxed whitespace-pre-line p-3 rounded-xl bg-black/60 border border-neutral-800/80 max-h-96 overflow-y-auto">
+                      {thoughtProcess.fetchedPage.content || 'Content extracted and analyzed.'}
+                    </div>
+                  </div>
+                </div>
+              ) : hasWebResults ? (
+                /* Live Search Result Feed */
+                <div className="space-y-2.5">
+                  <div className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                    Search Results ({thoughtProcess!.webResults!.length})
+                  </div>
+                  {thoughtProcess!.webResults!.map((result, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3.5 rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-600 transition space-y-1.5 group"
+                    >
+                      <div className="flex items-center justify-between text-[10px] text-neutral-400">
+                        <span className="font-mono text-neutral-500 uppercase">{result.domain || 'web'}</span>
+                        <a
+                          href={result.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-white font-medium hover:underline"
+                        >
+                          <span>Visit</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
                       <a
                         href={result.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="opacity-0 group-hover:opacity-100 flex items-center gap-1 text-black dark:text-white font-medium transition"
+                        className="block text-xs font-semibold text-white group-hover:underline leading-snug"
                       >
-                        <span>Visit</span>
-                        <ExternalLink className="w-2.5 h-2.5" />
+                        {result.title}
                       </a>
-                    </div>
-                    <a
-                      href={result.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-[12px] font-semibold text-black dark:text-white hover:underline leading-snug line-clamp-1"
-                    >
-                      {result.title}
-                    </a>
-                    {result.snippet && (
-                      <p className="text-[11px] text-neutral-500 dark:text-neutral-400 line-clamp-2 leading-relaxed">
-                        {result.snippet}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 3. Tool Calls & Database Queries */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
-            <span className="flex items-center gap-1.5">
-              <Terminal className="w-3.5 h-3.5" />
-              <span>Ultra Tools & DB Actions</span>
-            </span>
-            <span className="text-[10px] font-mono lowercase">
-              {thoughtProcess?.toolsCalled?.length || 0} executed
-            </span>
-          </div>
-
-          <div className="space-y-2">
-            {hasTools ? (
-              thoughtProcess!.toolsCalled!.map((tool, idx) => (
-                <div
-                  key={idx}
-                  className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 space-y-1.5"
-                >
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-mono font-semibold text-black dark:text-white flex items-center gap-1.5">
-                      {tool.tool.includes('web_search') ? (
-                        <Globe className="w-3 h-3 text-neutral-500" />
-                      ) : tool.tool.includes('fetch_webpage') ? (
-                        <BookOpen className="w-3 h-3 text-neutral-500" />
-                      ) : tool.tool.includes('lookup_weather') ? (
-                        <CloudSun className="w-3 h-3 text-neutral-500" />
-                      ) : tool.tool.includes('calculate') ? (
-                        <Calculator className="w-3 h-3 text-neutral-500" />
-                      ) : tool.tool.includes('dialogue') ? (
-                        <Search className="w-3 h-3 text-neutral-500" />
-                      ) : tool.tool.includes('memory') ? (
-                        <Brain className="w-3 h-3 text-neutral-500" />
-                      ) : (
-                        <Film className="w-3 h-3 text-neutral-500" />
+                      {result.snippet && (
+                        <p className="text-[11px] text-neutral-400 line-clamp-3 leading-relaxed">
+                          {result.snippet}
+                        </p>
                       )}
-                      <span>{tool.tool}</span>
-                    </span>
-                    <span className="text-[9px] px-1.5 py-0.2 rounded-full font-mono bg-neutral-200/80 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
-                      success
-                    </span>
-                  </div>
-
-                  {tool.query && (
-                    <div className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
-                      input: <span className="text-black dark:text-white font-medium">"{tool.query}"</span>
                     </div>
-                  )}
-
-                  {tool.resultSummary && (
-                    <div className="text-[11px] text-neutral-600 dark:text-neutral-300">
-                      {tool.resultSummary}
-                    </div>
-                  )}
+                  ))}
                 </div>
-              ))
-            ) : isSendingMessage ? (
-              <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-500 space-y-1">
-                <div>&gt; intent_evaluator: assessing conversational requirements...</div>
-              </div>
-            ) : (
-              <div className="p-3 rounded-2xl bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 text-[11px] text-neutral-500">
-                Direct conversational response — no database search was needed for this query.
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 4. Long-term Memories Recalled */}
-        {hasMemories && (
-          <div className="space-y-1.5">
-            <div className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
-              <Brain className="w-3.5 h-3.5" />
-              <span>Memories Considered</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {thoughtProcess!.memoriesConsidered!.map((key, i) => (
-                <span
-                  key={i}
-                  className="px-2.5 py-1 rounded-full text-[10.5px] font-medium bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white border border-neutral-200 dark:border-neutral-800"
-                >
-                  #{key}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 5. Evaluated Dialogue Candidates (If DB search was performed) */}
-        {hasCandidates && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
-              <span className="flex items-center gap-1.5">
-                <Film className="w-3.5 h-3.5" />
-                <span>Supabase Dialogues Scored</span>
-              </span>
-              <span className="text-[10px] font-mono">
-                {thoughtProcess!.topRankedCandidates!.length} evaluated
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              {thoughtProcess!.topRankedCandidates!.map((candidate, idx) => {
-                const isSelected = candidate.id === thoughtProcess?.selectedDialogueId;
-                return (
-                  <div
-                    key={candidate.id}
-                    className={`p-3 rounded-2xl border transition ${
-                      isSelected
-                        ? 'border-black dark:border-white bg-neutral-100 dark:bg-neutral-900 shadow-xs'
-                        : 'border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-950/50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-[10px] mb-1 font-mono">
-                      <span className="font-semibold text-neutral-400">
-                        Rank #{idx + 1}
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        {isSelected && (
-                          <span className="px-1.5 py-0.2 rounded bg-black text-white dark:bg-white dark:text-black font-semibold text-[9px] uppercase">
-                            Selected
-                          </span>
-                        )}
-                        {candidate.relevanceScore !== undefined && (
-                          <span className="font-bold text-black dark:text-white">
-                            +{candidate.relevanceScore} pts
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="text-[12px] font-medium text-black dark:text-white line-clamp-2 leading-snug">
-                      "{candidate.lineText}"
-                    </div>
-                    {candidate.lineTranslation && (
-                      <div className="text-[11px] text-neutral-500 dark:text-neutral-400 line-clamp-1 mt-0.5">
-                        {candidate.lineTranslation}
-                      </div>
-                    )}
+              ) : (
+                /* Default Browser Home Canvas (matching vadivelu-browser-app home.html) */
+                <div className="h-full flex flex-col items-center justify-center text-center p-6 space-y-4">
+                  <div className="w-12 h-12 rounded-2xl bg-red-600/20 border border-red-500/30 text-red-500 flex items-center justify-center font-bold text-xl shadow-lg">
+                    V
                   </div>
-                );
-              })}
+                  <div>
+                    <div className="text-base font-semibold text-white">VadiVelu In-App Browser</div>
+                    <p className="text-xs text-neutral-400 mt-1 max-w-xs">
+                      Ask Vadivelu to search for anything, open YouTube, or inspect links right here in this side panel.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Footer */}
-      <div className="p-3 border-t border-neutral-200 dark:border-neutral-800 text-center">
+      {/* 3. Footer */}
+      <div className="p-3 border-t border-neutral-200 dark:border-neutral-800 text-center shrink-0">
         <button
           onClick={onClose}
           className="w-full py-1.5 px-3 rounded-full text-xs font-semibold bg-neutral-100 hover:bg-neutral-200 dark:bg-neutral-900 dark:hover:bg-neutral-800 text-black dark:text-white transition active:scale-95"
         >
-          Collapse Thinking Preview
+          Collapse Side Panel
         </button>
       </div>
     </aside>

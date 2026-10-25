@@ -95,6 +95,7 @@ class ThoughtProcess(BaseSchema):
     web_results: Optional[List[WebSearchResult]] = Field(default_factory=list, alias="webResults")
     fetched_page: Optional[FetchedPageInfo] = Field(default=None, alias="fetchedPage")
     search_query: Optional[str] = Field(default=None, alias="searchQuery")
+    browser_url: Optional[str] = Field(default=None, alias="browserUrl")
 
 
 class PerformancePlan(BaseSchema):

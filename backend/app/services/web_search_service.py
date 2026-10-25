@@ -15,9 +15,11 @@ import urllib.parse
 from typing import Any, Dict, List, Optional
 
 import httpx
+from app.core.config import Settings
 from app.services.gemini_service import GeminiService
 
 logger = logging.getLogger("vadivelu.web_service")
+settings = Settings()
 
 
 class WebSearchService:
@@ -303,19 +305,19 @@ class WebSearchService:
         b64_data = base64.b64encode(wav_bytes).decode("utf-8")
 
         prompt = (
-            "You are an expert speech-to-text transcription engine specialized in multilingual and Indian code-mixed speech.\n\n"
-            "CRITICAL INSTRUCTIONS FOR TANGLISH, HINGLISH, AND ENGLISH:\n"
+            "Transcribe every single word of this audio verbatim into English/Latin script.\n\n"
+            "CRITICAL TANGLISH & HINGLISH RULES:\n"
             "1. TANGLISH (Tamil in English alphabet):\n"
-            "   If the speaker speaks Tamil or code-mixed Tamil (e.g. 'Enna panra', 'let us go', 'semma comedy bro', 'romba nalla irukku', 'enna visayam'), "
-            "   ALWAYS transcribe it phonetically in English/Latin letters (Tanglish), e.g. 'Enna panra, let\\'s go'. "
-            "   DO NOT convert into Tamil script.\n\n"
+            "   The speaker frequently speaks Tanglish (code-mixed Tamil and English, e.g. 'naan pesaradhu puriyudha da', 'enna panra', 'saptiya bro', 'pesuradhu puri ya da').\n"
+            "   Transcribe all Tamil words phonetically using the English/Latin alphabet. NEVER omit, drop, or truncate Tamil words.\n"
             "2. HINGLISH (Hindi in English alphabet):\n"
-            "   If the speaker speaks Hindi or code-mixed Hindi (e.g. 'Kya kar raha hai', 'kya chal raha hai', 'bhai let\\'s go'), "
-            "   ALWAYS transcribe it in English/Latin letters (Hinglish). "
-            "   DO NOT convert into Devanagari script.\n\n"
+            "   The speaker may speak Hinglish (code-mixed Hindi, e.g. 'kya kar raha hai bhai', 'chal let\\'s go').\n"
+            "   Transcribe Hindi words phonetically in English/Latin letters. Do NOT use Devanagari script.\n"
             "3. ENGLISH:\n"
-            "   If the speaker speaks English, transcribe in standard English.\n\n"
-            "4. OUTPUT FORMAT:\n"
+            "   Transcribe English words in standard English.\n"
+            "4. NEVER DROP WORDS:\n"
+            "   Keep every single word that was spoken from start to finish, even if languages switch in the same sentence.\n"
+            "5. OUTPUT FORMAT:\n"
             "   Output ONLY the transcribed words verbatim without any quotes, timestamps, labels, or extra comments."
         )
 
@@ -334,32 +336,47 @@ class WebSearchService:
             }
         ]
 
+        # Primary: Multimodal Flash Lite (understands Tamil/Hindi code-switching, never drops words)
         try:
-            # Primary: dedicated Google transcription model (zero rate limit issues, South Asian code-switching)
-            service = GeminiService(model="gemini-3.5-transcribe")
+            service = GeminiService(model=settings.GEMINI_MODEL)
             transcript, _ = await service.generate_content(
                 contents,
-                generation_config={"temperature": 0.1, "maxOutputTokens": 300},
+                generation_config={"temperature": 0.0, "maxOutputTokens": 300},
+            )
+            clean_transcript = transcript.strip().strip('"').strip("'")
+            if clean_transcript:
+                logger.info(f"Transcription successful via {settings.GEMINI_MODEL}: '{clean_transcript}'")
+                return clean_transcript
+        except Exception as e:
+            logger.warning(f"Primary transcription model ({settings.GEMINI_MODEL}) failed: {e}")
+
+        # Secondary: Gemini 3.1 Flash Lite
+        try:
+            fallback_service = GeminiService(model="gemini-3.1-flash-lite")
+            transcript, _ = await fallback_service.generate_content(
+                contents,
+                generation_config={"temperature": 0.0, "maxOutputTokens": 300},
+            )
+            clean_transcript = transcript.strip().strip('"').strip("'")
+            if clean_transcript:
+                logger.info(f"Transcription successful via fallback gemini-3.1-flash-lite: '{clean_transcript}'")
+                return clean_transcript
+        except Exception as e:
+            logger.warning(f"Secondary transcription fallback failed: {e}")
+
+        # Tertiary: Gemini 3.5 Transcribe
+        try:
+            tertiary_service = GeminiService(model="gemini-3.5-transcribe")
+            transcript, _ = await tertiary_service.generate_content(
+                contents,
+                generation_config={"temperature": 0.0, "maxOutputTokens": 300},
             )
             clean_transcript = transcript.strip().strip('"').strip("'")
             if clean_transcript:
                 logger.info(f"Transcription successful via gemini-3.5-transcribe: '{clean_transcript}'")
                 return clean_transcript
         except Exception as e:
-            logger.warning(f"Dedicated transcription model failed ({e}), falling back to standard flash...")
-
-        try:
-            # Secondary fallback
-            fallback_service = GeminiService(model=settings.GEMINI_MODEL)
-            transcript, _ = await fallback_service.generate_content(
-                contents,
-                generation_config={"temperature": 0.1, "maxOutputTokens": 300},
-            )
-            clean_transcript = transcript.strip().strip('"').strip("'")
-            logger.info(f"Transcription successful via fallback {settings.GEMINI_MODEL}: '{clean_transcript}'")
-            return clean_transcript
-        except Exception as e:
-            logger.error(f"Error during audio transcription fallback: {e}", exc_info=True)
+            logger.error(f"All transcription engines failed: {e}", exc_info=True)
             return ""
 
 

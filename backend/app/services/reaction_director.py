@@ -5,6 +5,7 @@ using true Gemini tool calling for intelligent meme discovery and server-side sp
 import json
 import logging
 import re
+import urllib.parse
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.core.config import settings
@@ -164,61 +165,60 @@ class ReactionDirector:
                 "No Gemini API keys configured. Please add your GEMINI_API_KEY_1 to .env or configure in Settings to chat."
             )
 
-        all_memes = await meme_service.list_memes()
-        meme_map = {m["id"]: m for m in all_memes}
-
-        # Rank dialogues to select top 15 most contextually relevant
-        ranked_dialogues = await meme_service.rank_dialogues(
-            prompt=user_message,
-            personality=personality,
-            limit=15,
-        )
-        dialogues_catalog_text = meme_service.format_memes_for_director(ranked_dialogues)
-
-        # Retrieve long-term memories with semantic relevance scoring
-        active_memories, relevant_memory_keys = await memory_service.retrieve_relevant_memories(
-            prompt=user_message,
-            history=history,
-            limit=10,
-        )
-        memories_text = memory_service.format_memories_for_prompt(
-            active_memories, relevant_keys=relevant_memory_keys
-        )
-
-        # 1. Check for URL link inspection (e.g. "what's this link bro: https://en.wikipedia.org/...")
+        # 1. URL link inspection (e.g. "what's this link bro: https://en.wikipedia.org/...")
         url_match = re.search(r"https?://[^\s]+", user_message)
         fetched_page_data: Optional[Dict[str, Any]] = None
+        browser_url: Optional[str] = None
         if url_match:
             raw_url = url_match.group(0).rstrip(".,)>\"'")
+            browser_url = raw_url
             try:
                 fetched_page_data = await web_search_service.fetch_webpage(raw_url)
             except Exception as e:
                 logger.warning(f"Failed to fetch webpage {raw_url}: {e}")
 
-        # 2. Check for web search triggers (e.g. "search for latest news", "who is the champion of...")
+        # 2. Browser & Search Commands (e.g. "open youtube in the right side bar and search whats AI", "search for latest news")
         web_search_results: List[Dict[str, Any]] = []
         search_query_used: Optional[str] = None
         lower_msg = user_message.lower().strip()
-        search_triggers = [
-            "search", "google", "look up", "who is", "who won", "what happened",
-            "latest news", "latest score", "current champion", "tell me about",
-        ]
-        is_search_intent = any(trigger in lower_msg for trigger in search_triggers) and len(user_message.split()) >= 2
 
-        if is_search_intent and not url_match:
-            clean_search_query = re.sub(
-                r"^(please\s+)?(search\s+(for\s+)?|look\s+up\s+|who\s+is\s+|what\s+is\s+|tell\s+me\s+about\s+)",
-                "",
-                user_message,
-                flags=re.IGNORECASE,
-            ).strip()
-            if not clean_search_query:
-                clean_search_query = user_message
-            search_query_used = clean_search_query
+        # Check for YouTube search command
+        youtube_match = re.search(
+            r"(?:open\s+)?youtube(?:\s+in\s+the\s+(?:right\s+)?(?:side\s*bar|panel))?(?:\s+and\s+search(?:\s+for)?|\s+search(?:\s+for)?)\s+(.+)",
+            user_message,
+            re.IGNORECASE,
+        )
+        if youtube_match:
+            yt_term = youtube_match.group(1).strip().strip("'\"")
+            search_query_used = yt_term
+            browser_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(yt_term)}"
             try:
-                web_search_results = await web_search_service.search_web(clean_search_query, max_results=5)
+                web_search_results = await web_search_service.search_web(f"{yt_term} site:youtube.com", max_results=5)
+                if not web_search_results:
+                    web_search_results = await web_search_service.search_web(yt_term, max_results=5)
             except Exception as e:
-                logger.warning(f"Web search failed for query '{clean_search_query}': {e}")
+                logger.warning(f"YouTube web search failed: {e}")
+        else:
+            search_triggers = [
+                "search", "google", "look up", "who is", "who won", "what happened",
+                "latest news", "latest score", "current champion", "tell me about",
+            ]
+            is_search_intent = any(trigger in lower_msg for trigger in search_triggers) and len(user_message.split()) >= 2
+            if is_search_intent and not url_match:
+                clean_search_query = re.sub(
+                    r"^(please\s+)?(open\s+[a-z\s]+and\s+)?(search\s+(for\s+)?|look\s+up\s+|who\s+is\s+|what\s+is\s+|tell\s+me\s+about\s+)",
+                    "",
+                    user_message,
+                    flags=re.IGNORECASE,
+                ).strip()
+                if not clean_search_query:
+                    clean_search_query = user_message
+                search_query_used = clean_search_query
+                browser_url = f"https://duckduckgo.com/?q={urllib.parse.quote_plus(clean_search_query)}"
+                try:
+                    web_search_results = await web_search_service.search_web(clean_search_query, max_results=5)
+                except Exception as e:
+                    logger.warning(f"Web search failed for query '{clean_search_query}': {e}")
 
         # 3. Check for live weather query
         weather_info: Optional[Dict[str, Any]] = None
@@ -239,6 +239,40 @@ class ReactionDirector:
                     math_info = web_search_service.calculate_math(math_expr.strip())
                 except Exception as e:
                     logger.warning(f"Math calculation failed: {e}")
+
+        # 5. Dialogue Database Searching (ONLY search when not a tool command!)
+        is_tool_command = (
+            youtube_match is not None
+            or bool(web_search_results)
+            or url_match is not None
+            or weather_info is not None
+            or math_info is not None
+        )
+
+        all_memes = await meme_service.list_memes()
+        meme_map: Dict[str, Dict[str, Any]] = {m["id"]: m for m in all_memes}
+        ranked_dialogues = []
+
+        if not is_tool_command:
+            ranked_dialogues = await meme_service.rank_dialogues(
+                prompt=user_message,
+                personality=personality,
+                limit=15,
+            )
+            dialogues_catalog_text = meme_service.format_memes_for_director(ranked_dialogues)
+        else:
+            logger.info("Functional/tool command detected — skipping Supabase dialogue ranking.")
+            dialogues_catalog_text = "No meme required for this functional/tool command. Deliver pure natural speech."
+
+        # 6. Retrieve long-term memories with semantic relevance scoring
+        active_memories, relevant_memory_keys = await memory_service.retrieve_relevant_memories(
+            prompt=user_message,
+            history=history,
+            limit=5,
+        )
+        memories_text = memory_service.format_memories_for_prompt(
+            active_memories, relevant_keys=relevant_memory_keys
+        )
 
         # Build Real-Time Tool Context for Gemini
         realtime_tool_blocks = []
@@ -393,15 +427,18 @@ class ReactionDirector:
                 )
             )
 
-        if selected_meme_id:
+        # Real Tools only in tools_called
+        if browser_url and "youtube" in browser_url.lower():
             tools_called.append(
                 ToolCallInfo(
-                    tool="search_dialogues",
-                    query=user_message[:60],
-                    result_summary=f"Evaluated Supabase dialogues catalog. Found comedic punchline match ({selected_meme_title or selected_meme_id})",
-                    items_count=len(ranked_dialogues),
+                    tool="in_app_browser",
+                    query=search_query_used or browser_url,
+                    result_summary=f"Opened YouTube search for '{search_query_used}' in side panel",
+                    items_count=len(web_search_results),
                 )
             )
+
+        if selected_meme_id:
             tools_called.append(
                 ToolCallInfo(
                     tool="select_meme_reaction",
@@ -410,51 +447,45 @@ class ReactionDirector:
                     items_count=1,
                 )
             )
-        else:
-            tools_called.append(
-                ToolCallInfo(
-                    tool="intent_evaluator",
-                    query=user_message[:60],
-                    result_summary="Assessed user intent: natural conversational speech is preferred without meme insertion",
-                    items_count=0,
-                )
-            )
 
-        if active_memories:
+        if relevant_memory_keys:
             tools_called.append(
                 ToolCallInfo(
                     tool="retrieve_relevant_memories",
                     query=user_message[:60],
-                    result_summary=f"Retrieved {len(active_memories)} contextual facts ({len(relevant_memory_keys)} high relevance)",
-                    items_count=len(active_memories),
+                    result_summary=f"Recalled {len(relevant_memory_keys)} relevant facts",
+                    items_count=len(relevant_memory_keys),
                 )
             )
 
+        # Candidates: ONLY show candidate previews if a meme was actually selected or actively searched!
         top_candidates = []
-        for d in ranked_dialogues[:6]:
-            top_candidates.append(
-                CandidateDialoguePreview(
-                    id=str(d.get("id")),
-                    line_text=d.get("lineText") or d.get("title"),
-                    line_translation=d.get("lineTranslation") or d.get("contextHint"),
-                    relevance_score=d.get("relevanceScore"),
-                    emotion=d.get("emotion"),
-                    tags=d.get("tags") or [],
+        if selected_meme_id and ranked_dialogues:
+            for d in ranked_dialogues[:3]:
+                top_candidates.append(
+                    CandidateDialoguePreview(
+                        id=str(d.get("id")),
+                        line_text=d.get("lineText") or d.get("title"),
+                        line_translation=d.get("lineTranslation") or d.get("contextHint"),
+                        relevance_score=d.get("relevanceScore"),
+                        emotion=d.get("emotion"),
+                        tags=d.get("tags") or [],
+                    )
                 )
-            )
 
         thought_process = ThoughtProcess(
-            reasoning=plan_dict.get("reasoning", "Dynamic comedic directing with context ranking"),
+            reasoning=plan_dict.get("reasoning", "Conversational response formulation"),
             duration_ms=1800,
-            searches=[user_message[:45], f"emotion:{plan_dict.get('emotion', 'comedy')}"],
+            searches=[user_message[:45]],
             tools_called=tools_called,
-            memories_considered=[m.get("key", "") for m in active_memories if m.get("key")],
+            memories_considered=list(relevant_memory_keys) if relevant_memory_keys else [],
             selected_dialogue_id=selected_meme_id,
             selected_dialogue_title=selected_meme_title,
             top_ranked_candidates=top_candidates,
             web_results=[WebSearchResult(**r) for r in web_search_results] if web_search_results else [],
             fetched_page=FetchedPageInfo(**fetched_page_data) if fetched_page_data else None,
             search_query=search_query_used,
+            browser_url=browser_url,
         )
 
         plan = PerformancePlan(
