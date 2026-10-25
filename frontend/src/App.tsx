@@ -307,14 +307,22 @@ export const App: React.FC = () => {
     },
   });
 
-  // Start Live Voice Chat (Mini UI in bottom right corner as requested)
-  const handleOpenLiveVoice = useCallback(() => {
-    setIsMiniVoiceOpen(true);
+  // Launch Fullscreen Advanced Voice Mode (ChatGPT style)
+  const handleLaunchVoiceMode = useCallback(() => {
+    setIsVoiceMode(true);
+    setIsMiniVoiceOpen(false);
     speechRecognition.startListening();
   }, [speechRecognition]);
 
-  // Close Live Voice Chat
+  // Minimize Fullscreen Voice Mode into sleek Dynamic Island floating capsule
+  const handleMinimizeVoiceMode = useCallback(() => {
+    setIsVoiceMode(false);
+    setIsMiniVoiceOpen(true);
+  }, []);
+
+  // Close Live Voice Session completely
   const handleCloseLiveVoice = useCallback(() => {
+    setIsVoiceMode(false);
     setIsMiniVoiceOpen(false);
     speechRecognition.stopListening();
     if (audioPerformance.isPlaying) {
@@ -391,10 +399,11 @@ export const App: React.FC = () => {
 
   return (
     <div className={`w-screen h-screen overflow-hidden ${isDark ? 'dark bg-black text-white' : 'bg-white text-black'} transition-colors duration-150`}>
-      {/* Immersive Fullscreen Voice Mode View */}
+      {/* Immersive Fullscreen Advanced Voice Mode View (ChatGPT style) */}
       {isVoiceMode ? (
         <VoiceModeView
-          onClose={() => setIsVoiceMode(false)}
+          onClose={handleCloseLiveVoice}
+          onMinimize={handleMinimizeVoiceMode}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           isListening={speechRecognition.isListening}
           onToggleListening={() => {
@@ -423,7 +432,7 @@ export const App: React.FC = () => {
           onRenameConversation={handleRenameConversation}
           messages={messages}
           onSendMessage={handleSendMessage}
-          onOpenVoiceMode={handleOpenLiveVoice}
+          onOpenVoiceMode={handleLaunchVoiceMode}
           onPlayMessageAudio={handlePlayMessageAudio}
           isAudioPlaying={audioPerformance.isPlaying}
           playingMessageId={playingMessageId}
@@ -449,15 +458,12 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* Mini Voice Chat Widget in Bottom Right Corner (small as possible) */}
+      {/* Modern Dynamic Island Voice Capsule (Floating 42px pill) */}
       {!isVoiceMode && (
         <MiniVoiceWidget
           isOpen={isMiniVoiceOpen}
           onClose={handleCloseLiveVoice}
-          onExpandFullscreen={() => {
-            setIsMiniVoiceOpen(false);
-            setIsVoiceMode(true);
-          }}
+          onExpandFullscreen={handleLaunchVoiceMode}
           isListening={speechRecognition.isListening}
           onToggleListening={() => {
             if (speechRecognition.isListening) speechRecognition.stopListening();
@@ -491,7 +497,7 @@ export const App: React.FC = () => {
           handleNewChat();
           setIsCommandPaletteOpen(false);
         }}
-        onToggleVoiceMode={handleOpenLiveVoice}
+        onToggleVoiceMode={handleLaunchVoiceMode}
         onOpenMemes={() => {
           setIsCommandPaletteOpen(false);
           setIsMemeLibraryOpen(true);
