@@ -335,16 +335,31 @@ class WebSearchService:
         ]
 
         try:
-            service = GeminiService()
+            # Primary: dedicated Google transcription model (zero rate limit issues, South Asian code-switching)
+            service = GeminiService(model="gemini-3.5-transcribe")
             transcript, _ = await service.generate_content(
                 contents,
                 generation_config={"temperature": 0.1, "maxOutputTokens": 300},
             )
             clean_transcript = transcript.strip().strip('"').strip("'")
-            logger.info(f"Transcription successful: '{clean_transcript}'")
+            if clean_transcript:
+                logger.info(f"Transcription successful via gemini-3.5-transcribe: '{clean_transcript}'")
+                return clean_transcript
+        except Exception as e:
+            logger.warning(f"Dedicated transcription model failed ({e}), falling back to standard flash...")
+
+        try:
+            # Secondary fallback
+            fallback_service = GeminiService(model=settings.GEMINI_MODEL)
+            transcript, _ = await fallback_service.generate_content(
+                contents,
+                generation_config={"temperature": 0.1, "maxOutputTokens": 300},
+            )
+            clean_transcript = transcript.strip().strip('"').strip("'")
+            logger.info(f"Transcription successful via fallback {settings.GEMINI_MODEL}: '{clean_transcript}'")
             return clean_transcript
         except Exception as e:
-            logger.error(f"Error during audio transcription: {e}", exc_info=True)
+            logger.error(f"Error during audio transcription fallback: {e}", exc_info=True)
             return ""
 
 

@@ -722,7 +722,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
               <input
                 ref={inputRef}
                 type="text"
-                value={inputText || (isListening ? (voiceInterimTranscript || voiceTranscript) : '')}
+                value={inputText || ((isListening || isTranscribing) ? (voiceTranscript || voiceInterimTranscript) : '')}
                 onChange={e => setInputText(e.target.value)}
                 placeholder={
                   isSendingMessage

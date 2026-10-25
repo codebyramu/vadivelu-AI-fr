@@ -109,8 +109,12 @@ class GeminiService:
                 continue
 
             # No function call, we have the final textual/json response!
-            text = candidate_part.get("text", "")
-            return text.strip(), primary_key_alias
+            text = candidate_part.get("text")
+            if not text and isinstance(candidate_part.get("audioTranscription"), dict):
+                text = candidate_part.get("audioTranscription", {}).get("text", "")
+            if not text and isinstance(candidate_part.get("text"), str):
+                text = candidate_part.get("text", "")
+            return (text or "").strip(), primary_key_alias
 
         return "", primary_key_alias
 
