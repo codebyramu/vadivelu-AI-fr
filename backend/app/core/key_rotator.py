@@ -193,10 +193,13 @@ class GeminiKeyRotator:
                     )
                 elif status_code in (429, 500, 502, 503, 504):
                     k.consecutive_failures += 1
-                    backoff = min(
-                        settings.MAX_KEY_COOLDOWN_SECONDS,
-                        settings.DEFAULT_KEY_COOLDOWN_SECONDS * (2 ** (k.consecutive_failures - 1)),
-                    )
+                    if "per day limit exceeded" in sanitized_detail.lower() or "quota exceeded" in sanitized_detail.lower():
+                        backoff = 3600.0  # Cool down for 1 hour so healthy keys respond instantly
+                    else:
+                        backoff = min(
+                            float(settings.MAX_KEY_COOLDOWN_SECONDS),
+                            float(settings.DEFAULT_KEY_COOLDOWN_SECONDS) * (2 ** (k.consecutive_failures - 1)),
+                        )
                     k.status = "cooldown"
                     k.cooldown_until = now + backoff
                     logger.warning(

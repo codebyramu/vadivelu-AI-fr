@@ -53,7 +53,7 @@ export interface UseSpeechRecognitionOptions {
 
 export function useSpeechRecognition({
   mode = 'push_to_talk',
-  silenceTimeoutMs = 1500,
+  silenceTimeoutMs = 1300,
   onSpeechResult,
   onFinalTranscript,
   onSpeechStart,
@@ -66,21 +66,24 @@ export function useSpeechRecognition({
   const [isSupported, setIsSupported] = useState(true);
   const [micLevel, setMicLevel] = useState(0);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isSpeakingDetected, setIsSpeakingDetected] = useState(false);
 
   const isListeningRef = useRef(false);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
+  const nativeFailedRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const micAnalyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const activeTranscriptRef = useRef('');
 
-  // VAD (Voice Activity Detection) tracking
-  const hasSpokenInTurnRef = useRef(false);
+  // VAD tracking
+  const hasSpokenInCurrentTurnRef = useRef(false);
   const lastSoundTimestampRef = useRef<number>(0);
   const isFinalizingTurnRef = useRef(false);
+  const turnStartTimeRef = useRef<number>(0);
 
-  // MediaRecorder audio backup for 100% reliable backend Gemini transcription
+  // MediaRecorder audio capture
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
@@ -90,7 +93,7 @@ export function useSpeechRecognition({
     setIsSupported(hasWebSpeech || hasMediaDevices);
   }, []);
 
-  // Cleanup timers and mic streams
+  // Cleanup mic streams and Web Audio nodes
   const cleanupMicStream = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -101,94 +104,129 @@ export function useSpeechRecognition({
       micStreamRef.current = null;
     }
     setMicLevel(0);
+    setIsSpeakingDetected(false);
   }, []);
 
-  // Finalizes the current spoken segment and sends either native text or audio to Gemini
+  // Helper to stop current MediaRecorder and get all accumulated audio bytes
+  const stopRecorderAndGetBlob = useCallback((): Promise<Blob | null> => {
+    return new Promise((resolve) => {
+      const recorder = mediaRecorderRef.current;
+      if (!recorder || recorder.state === 'inactive') {
+        if (audioChunksRef.current.length > 0) {
+          const blob = new Blob(audioChunksRef.current, { type: recorder?.mimeType || 'audio/webm' });
+          audioChunksRef.current = [];
+          resolve(blob);
+        } else {
+          resolve(null);
+        }
+        return;
+      }
+
+      recorder.onstop = () => {
+        if (audioChunksRef.current.length > 0) {
+          const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+          audioChunksRef.current = [];
+          resolve(blob);
+        } else {
+          resolve(null);
+        }
+      };
+
+      try {
+        recorder.stop();
+      } catch {
+        resolve(null);
+      }
+    });
+  }, []);
+
+  // Helper to start a fresh MediaRecorder instance on the active stream
+  const startNewRecorder = useCallback((stream: MediaStream) => {
+    try {
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : '';
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start(150);
+      turnStartTimeRef.current = Date.now();
+      return recorder;
+    } catch (err) {
+      console.warn('[Vadivelu Voice] Could not start MediaRecorder:', err);
+      return null;
+    }
+  }, []);
+
+  // Finalizes the current spoken utterance and dispatches it
   const finalizeSpeechTurn = useCallback(async () => {
     if (isFinalizingTurnRef.current) return;
     isFinalizingTurnRef.current = true;
 
-    // 1. If native WebSpeech provided a transcript
+    console.log('[Vadivelu Voice] Finalizing speech utterance...');
+
+    // 1. If native WebSpeech provided text
     const nativeText = activeTranscriptRef.current.trim();
     if (nativeText) {
+      console.log('[Vadivelu Voice] Dispatched native transcript:', nativeText);
       onFinalTranscript?.(nativeText);
       activeTranscriptRef.current = '';
       setTranscript(nativeText);
       setInterimTranscript('');
-      hasSpokenInTurnRef.current = false;
+      hasSpokenInCurrentTurnRef.current = false;
       audioChunksRef.current = [];
       isFinalizingTurnRef.current = false;
       return;
     }
 
     // 2. Otherwise use MediaRecorder audio -> Gemini transcription backend
-    const recorder = mediaRecorderRef.current;
-    if (recorder && recorder.state !== 'inactive') {
+    const audioBlob = await stopRecorderAndGetBlob();
+    hasSpokenInCurrentTurnRef.current = false;
+    lastSoundTimestampRef.current = 0;
+
+    if (audioBlob && audioBlob.size > 800) {
+      console.log(`[Vadivelu Voice] Sending audio blob (${audioBlob.size} bytes, ${audioBlob.type}) to Gemini STT...`);
       try {
-        // Stop current recorder to finalize current audio chunks
-        recorder.stop();
-      } catch {
-        // ignore
-      }
-    }
+        setIsTranscribing(true);
+        setInterimTranscript('Transcribing speech...');
+        const res = await api.transcribeAudio(audioBlob);
+        const recognizedText = res?.transcript?.trim();
+        console.log('[Vadivelu Voice] Backend transcription result:', recognizedText);
 
-    // Wait slightly for final ondataavailable event
-    await new Promise(resolve => setTimeout(resolve, 80));
-
-    const chunks = [...audioChunksRef.current];
-    audioChunksRef.current = [];
-    hasSpokenInTurnRef.current = false;
-
-    if (chunks.length > 0) {
-      const audioBlob = new Blob(chunks, { type: recorder?.mimeType || 'audio/webm' });
-      if (audioBlob.size > 1500) {
-        try {
-          setIsTranscribing(true);
-          setInterimTranscript('Transcribing speech...');
-          const res = await api.transcribeAudio(audioBlob);
-          if (res && res.transcript && res.transcript.trim()) {
-            const cleanText = res.transcript.trim();
-            setTranscript(cleanText);
-            setInterimTranscript('');
-            onFinalTranscript?.(cleanText);
-          } else {
-            setInterimTranscript('');
-          }
-        } catch (err) {
-          console.warn('Audio transcription error:', err);
+        if (recognizedText && recognizedText.length > 0) {
+          setTranscript(recognizedText);
           setInterimTranscript('');
-        } finally {
-          setIsTranscribing(false);
+          onFinalTranscript?.(recognizedText);
+        } else {
+          setInterimTranscript('');
         }
+      } catch (err) {
+        console.warn('[Vadivelu Voice] Backend audio transcription failed:', err);
+        setInterimTranscript('');
+      } finally {
+        setIsTranscribing(false);
       }
+    } else {
+      console.log('[Vadivelu Voice] Audio snippet too short, skipping empty audio.');
     }
 
     isFinalizingTurnRef.current = false;
 
-    // In continuous mode, restart recording for next sentence if still listening
+    // In continuous mode, restart recorder for the next sentence if still listening
     if (mode === 'continuous' && isListeningRef.current && micStreamRef.current) {
-      try {
-        const stream = micStreamRef.current;
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : '';
-        const newRecorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-        newRecorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) {
-            audioChunksRef.current.push(e.data);
-          }
-        };
-        mediaRecorderRef.current = newRecorder;
-        newRecorder.start(200);
-      } catch (err) {
-        console.warn('Could not restart recorder in continuous mode:', err);
-      }
+      console.log('[Vadivelu Voice] Restarting recorder for continuous listening...');
+      startNewRecorder(micStreamRef.current);
     }
-  }, [mode, onFinalTranscript]);
+  }, [mode, onFinalTranscript, stopRecorderAndGetBlob, startNewRecorder]);
 
-  // Initialize Microphone Web Audio Analyser, VAD, and MediaRecorder
+  // Initialize Microphone Web Audio Analyser, VAD loop, and MediaRecorder
   const initMicAudio = useCallback(async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) return null;
@@ -201,26 +239,10 @@ export function useSpeechRecognition({
       });
       micStreamRef.current = stream;
 
-      // Initialize MediaRecorder
-      try {
-        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : MediaRecorder.isTypeSupported('audio/webm')
-          ? 'audio/webm'
-          : '';
-        const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-        audioChunksRef.current = [];
-        recorder.ondataavailable = (e) => {
-          if (e.data && e.data.size > 0) {
-            audioChunksRef.current.push(e.data);
-          }
-        };
-        mediaRecorderRef.current = recorder;
-      } catch (recErr) {
-        console.warn('MediaRecorder init error:', recErr);
-      }
+      // Start MediaRecorder
+      startNewRecorder(stream);
 
-      // Initialize Web Audio API Analyser for level visualization & VAD
+      // Web Audio Analyser
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         const ctx = audioContextRef.current || new AudioCtx();
@@ -235,31 +257,48 @@ export function useSpeechRecognition({
         source.connect(analyser);
         micAnalyserRef.current = analyser;
 
-        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        const timeData = new Uint8Array(analyser.frequencyBinCount);
+        const freqData = new Uint8Array(analyser.frequencyBinCount);
 
         const updateLevelAndVAD = () => {
           if (!micStreamRef.current || !isListeningRef.current) return;
-          analyser.getByteFrequencyData(dataArray);
 
-          let sum = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            sum += dataArray[i];
+          // 1. Calculate RMS from time domain data
+          analyser.getByteTimeDomainData(timeData);
+          let sumSquares = 0;
+          for (let i = 0; i < timeData.length; i++) {
+            const v = (timeData[i] - 128) / 128;
+            sumSquares += v * v;
           }
-          const avg = sum / dataArray.length;
-          const normalizedLevel = avg / 128;
+          const rms = Math.sqrt(sumSquares / timeData.length);
+
+          // 2. Calculate peak voice frequency
+          analyser.getByteFrequencyData(freqData);
+          let maxVoiceFreq = 0;
+          for (let i = 1; i < 35 && i < freqData.length; i++) {
+            if (freqData[i] > maxVoiceFreq) maxVoiceFreq = freqData[i];
+          }
+
+          const normalizedLevel = Math.min(rms * 4.5, 1.0);
           setMicLevel(normalizedLevel);
 
           const now = Date.now();
-          // Speech energy threshold (voice activity detection)
-          if (avg > 7.5) {
-            hasSpokenInTurnRef.current = true;
+          // Voice Activity Detection threshold (whisper or speaking)
+          const isSpeakingNow = rms > 0.015 || maxVoiceFreq > 18;
+
+          if (isSpeakingNow) {
+            hasSpokenInCurrentTurnRef.current = true;
             lastSoundTimestampRef.current = now;
-          } else if (hasSpokenInTurnRef.current && lastSoundTimestampRef.current > 0) {
-            // User had spoken, check silence duration
-            const silenceElapsed = now - lastSoundTimestampRef.current;
-            if (silenceElapsed > silenceTimeoutMs && !isFinalizingTurnRef.current) {
-              lastSoundTimestampRef.current = 0;
-              finalizeSpeechTurn();
+            setIsSpeakingDetected(true);
+          } else {
+            setIsSpeakingDetected(false);
+            if (hasSpokenInCurrentTurnRef.current && lastSoundTimestampRef.current > 0) {
+              const silenceElapsed = now - lastSoundTimestampRef.current;
+              // If user paused for silenceTimeoutMs after speaking
+              if (silenceElapsed > silenceTimeoutMs && !isFinalizingTurnRef.current) {
+                lastSoundTimestampRef.current = 0;
+                finalizeSpeechTurn();
+              }
             }
           }
 
@@ -270,15 +309,16 @@ export function useSpeechRecognition({
       }
       return stream;
     } catch (e) {
-      console.warn('Microphone stream access not granted or unavailable:', e);
+      console.warn('[Vadivelu Voice] Microphone access error:', e);
       return null;
     }
-  }, [silenceTimeoutMs, finalizeSpeechTurn]);
+  }, [silenceTimeoutMs, finalizeSpeechTurn, startNewRecorder]);
 
+  // Stop listening
   const stopListening = useCallback(async () => {
+    console.log('[Vadivelu Voice] Stopping listening...');
     isListeningRef.current = false;
 
-    // Stop native recognition
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -291,20 +331,23 @@ export function useSpeechRecognition({
     setIsListening(false);
     onSpeechEnd?.();
 
-    // Finalize speech if user was talking
-    if (hasSpokenInTurnRef.current || audioChunksRef.current.length > 0 || activeTranscriptRef.current) {
+    // If user spoke or we have audio chunks recorded, finalize and transcribe immediately
+    if (hasSpokenInCurrentTurnRef.current || audioChunksRef.current.length > 0 || activeTranscriptRef.current) {
       await finalizeSpeechTurn();
     }
 
     cleanupMicStream();
   }, [cleanupMicStream, onSpeechEnd, finalizeSpeechTurn]);
 
+  // Start listening
   const startListening = useCallback(async () => {
+    console.log('[Vadivelu Voice] Starting listening...');
     setError(null);
     activeTranscriptRef.current = '';
     audioChunksRef.current = [];
-    hasSpokenInTurnRef.current = false;
+    hasSpokenInCurrentTurnRef.current = false;
     lastSoundTimestampRef.current = 0;
+    nativeFailedRef.current = false;
     setTranscript('');
     setInterimTranscript('');
     isListeningRef.current = true;
@@ -319,17 +362,9 @@ export function useSpeechRecognition({
       return;
     }
 
-    // Start audio backup recording
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'inactive') {
-      try {
-        mediaRecorderRef.current.start(200);
-      } catch (e) {
-        console.warn('Could not start MediaRecorder:', e);
-      }
-    }
-
+    // Attempt Native Speech Recognition if available
     const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRec) {
+    if (SpeechRec && !nativeFailedRef.current) {
       try {
         const rec = new SpeechRec();
         rec.continuous = mode === 'continuous';
@@ -357,26 +392,29 @@ export function useSpeechRecognition({
             activeTranscriptRef.current += (activeTranscriptRef.current ? ' ' : '') + currentFinal.trim();
             setTranscript(activeTranscriptRef.current);
             onSpeechResult?.(activeTranscriptRef.current, true);
-            hasSpokenInTurnRef.current = true;
+            hasSpokenInCurrentTurnRef.current = true;
             lastSoundTimestampRef.current = Date.now();
           }
 
           setInterimTranscript(currentInterim);
           if (currentInterim) {
             onSpeechResult?.(currentInterim, false);
-            hasSpokenInTurnRef.current = true;
+            hasSpokenInCurrentTurnRef.current = true;
             lastSoundTimestampRef.current = Date.now();
           }
         };
 
         rec.onerror = (e: SpeechRecognitionErrorEventLike) => {
-          // Native Web Speech error on Linux Chromium / Brave: gracefully fallback to MediaRecorder + VAD
-          if (e.error !== 'no-speech') {
-            console.warn(`Native speech recognition error: ${e.error}. Using backend audio VAD transcription.`);
+          if (e.error === 'network' || e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+            console.warn(`[Vadivelu Voice] Native speech recognition unavailable (${e.error}). Falling back smoothly to VAD + Gemini Audio.`);
+            nativeFailedRef.current = true;
+            try { rec.abort(); } catch {}
+            recognitionRef.current = null;
           }
         };
 
         rec.onend = () => {
+          if (nativeFailedRef.current) return;
           if (mode === 'continuous' && isListeningRef.current) {
             try {
               rec.start();
@@ -389,7 +427,8 @@ export function useSpeechRecognition({
         recognitionRef.current = rec;
         rec.start();
       } catch (e: unknown) {
-        console.warn('Native speech recognition failed to start, using VAD + MediaRecorder:', e);
+        console.warn('[Vadivelu Voice] Native speech recognition failed to start, using VAD + Gemini:', e);
+        nativeFailedRef.current = true;
       }
     }
   }, [mode, onSpeechStart, onSpeechResult, initMicAudio]);
@@ -438,6 +477,7 @@ export function useSpeechRecognition({
     interimTranscript,
     isSupported,
     isTranscribing,
+    isSpeakingDetected,
     error,
     micLevel,
     micAnalyser: micAnalyserRef.current,
