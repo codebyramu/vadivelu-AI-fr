@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   Mic,
   MicOff,
@@ -9,6 +9,7 @@ import {
   Volume2,
   Minimize2,
   Sparkles,
+  ArrowUp,
 } from 'lucide-react';
 import { SonicWaveformVisualizer } from './SonicWaveformVisualizer';
 import { ActiveMemeInfo, PlaybackStatus } from '../hooks/useAudioPerformance';
@@ -28,13 +29,13 @@ interface VoiceModeViewProps {
   transcript?: string;
   interimTranscript?: string;
   onPlayMessageAudio?: (msg: Message) => void;
+  onSendMessage?: (text: string) => void;
+  isSendingMessage?: boolean;
 }
 
 /**
- * Fullscreen Voice Mode View (Strictly matching user Image 3)
- * Displays top status header, scrolling chat messages with voice badges,
- * centered fluid voice orb with 5 soundwave bars, 3 circular action buttons,
- * and bottom response hint capsule.
+ * Fullscreen Voice Mode View with Integrated Chat & Link Pasting
+ * Allows continuous voice interaction alongside typing messages or pasting links.
  */
 export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
   onClose,
@@ -49,7 +50,10 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
   transcript = '',
   interimTranscript = '',
   onPlayMessageAudio,
+  onSendMessage,
+  isSendingMessage = false,
 }) => {
+  const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const isPlayingAudio = playbackStatus === 'playing_speech' || playbackStatus === 'playing_meme';
@@ -59,8 +63,8 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
     statusText = activeMeme.title || activeMeme.memeId;
   } else if (isPlayingAudio) {
     statusText = 'Vadivelu is speaking…';
-  } else if (playbackStatus === 'preparing') {
-    statusText = 'Preparing…';
+  } else if (playbackStatus === 'preparing' || isSendingMessage) {
+    statusText = 'Thinking…';
   } else if (isListening) {
     statusText = 'Listening...';
   } else {
@@ -70,18 +74,48 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
   // Scroll messages to bottom smoothly as new messages appear
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, interimTranscript]);
+  }, [messages, interimTranscript, isSendingMessage]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
   };
 
+  const handleSendText = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim() || isSendingMessage) return;
+    onSendMessage?.(inputText.trim());
+    setInputText('');
+  };
+
+  // Helper to detect links and make them clickable
+  const renderFormattedText = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) => {
+      if (part.match(urlRegex)) {
+        return (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-white underline underline-offset-2 break-all hover:opacity-80"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
+  };
+
   return (
     <div className="relative w-full h-screen max-h-screen bg-black text-white flex flex-col justify-between overflow-hidden select-none font-sans">
-      {/* Top Header Bar (Image 3: "• VADIVELU AI VOICE") */}
+      {/* Top Header Bar ("• VADIVELU AI VOICE") */}
       <div className="h-14 px-6 flex items-center justify-between z-20 shrink-0 border-b border-neutral-900 bg-black">
-        {/* Left: Spacer or Back */}
-        <div className="w-20">
+        {/* Left: Minimize button */}
+        <div className="w-24">
           {onMinimize && (
             <button
               onClick={onMinimize}
@@ -94,7 +128,7 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
           )}
         </div>
 
-        {/* Center: Live Status Indicator (Image 3) */}
+        {/* Center: Live Status Indicator */}
         <div className="flex items-center gap-2">
           <span
             className={`w-2.5 h-2.5 rounded-full ${
@@ -111,7 +145,7 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
         </div>
 
         {/* Right: Close button */}
-        <div className="w-20 flex justify-end">
+        <div className="w-24 flex justify-end">
           <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-900 transition"
@@ -122,11 +156,11 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
         </div>
       </div>
 
-      {/* Main Conversation Stream (Image 3) */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 max-w-3xl mx-auto w-full">
+      {/* Main Conversation Stream */}
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 max-w-3xl mx-auto w-full">
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-center text-neutral-600 text-xs">
-            Speak naturally to start conversation with Vadivelu...
+            Speak with voice or paste links/questions below to chat with Vadivelu...
           </div>
         ) : (
           messages.map((msg) => {
@@ -135,9 +169,9 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
             if (isUser) {
               return (
                 <div key={msg.id} className="flex justify-end animate-in fade-in slide-in-from-bottom-1">
-                  <div className="bg-neutral-900/90 border border-neutral-800 text-white rounded-2xl px-4 py-2.5 text-xs font-medium flex items-center gap-2 shadow-xs max-w-[80%]">
+                  <div className="bg-neutral-900/90 border border-neutral-800 text-white rounded-2xl px-4 py-2.5 text-xs font-medium flex items-center gap-2 shadow-xs max-w-[80%] break-words">
                     <Mic className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                    <span>{msg.content}</span>
+                    <span>{renderFormattedText(msg.content)}</span>
                   </div>
                 </div>
               );
@@ -145,10 +179,10 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
 
             return (
               <div key={msg.id} className="flex justify-start animate-in fade-in slide-in-from-bottom-1">
-                <div className="max-w-[85%] bg-neutral-900/80 border border-neutral-800/90 text-neutral-200 rounded-2xl px-4 py-3 text-xs leading-relaxed space-y-2 shadow-xs">
-                  <div>{msg.content}</div>
+                <div className="max-w-[85%] bg-neutral-900/80 border border-neutral-800/90 text-neutral-200 rounded-2xl px-4 py-3 text-xs leading-relaxed space-y-2 shadow-xs break-words">
+                  <div>{renderFormattedText(msg.content)}</div>
 
-                  {/* Action Icons underneath Assistant message (Image 3) */}
+                  {/* Action Icons underneath Assistant message */}
                   <div className="flex items-center gap-3 pt-1 text-neutral-500">
                     <button
                       onClick={() => handleCopy(msg.content)}
@@ -189,14 +223,24 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
           </div>
         )}
 
+        {/* Thinking skeleton */}
+        {isSendingMessage && (
+          <div className="flex justify-start animate-in fade-in">
+            <div className="bg-neutral-900/60 border border-neutral-800 text-neutral-400 rounded-2xl px-4 py-2 text-xs flex items-center gap-2 animate-pulse">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span>Vadivelu is thinking…</span>
+            </div>
+          </div>
+        )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Voice Interaction & Controls Area (Image 3) */}
-      <div className="shrink-0 flex flex-col items-center pb-8 pt-2 bg-gradient-to-t from-black via-black/95 to-transparent">
+      {/* Voice Interaction & Controls & Chat Input Area */}
+      <div className="shrink-0 flex flex-col items-center pb-5 pt-1 bg-gradient-to-t from-black via-black/95 to-transparent w-full">
         {/* Dynamic Meme Banner (if authentic dialogue clip is playing) */}
         {activeMeme && (
-          <div className="mb-2 inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-xs text-white shadow-lg animate-in fade-in zoom-in-95">
+          <div className="mb-1.5 inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-xs text-white shadow-lg animate-in fade-in zoom-in-95">
             <Sparkles className="w-3.5 h-3.5 text-white animate-spin" style={{ animationDuration: '4s' }} />
             <span className="font-semibold text-[11px] truncate max-w-[240px]">
               {activeMeme.title || activeMeme.memeId}
@@ -204,8 +248,8 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
           </div>
         )}
 
-        {/* Fluid Voice Orb with 5 Animated Equalizer Bars in the center (Image 3) */}
-        <div className="relative w-44 h-44 flex items-center justify-center">
+        {/* Fluid Voice Orb with 5 Animated Equalizer Bars in the center */}
+        <div className="relative w-36 h-36 flex items-center justify-center">
           <SonicWaveformVisualizer
             analyserNode={analyserNode}
             isActive={isListening || playbackStatus !== 'idle'}
@@ -214,36 +258,36 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
             className="w-full h-full"
           />
 
-          {/* 5 Vertical Animated Equalizer Bars in the center of the orb (Image 3) */}
+          {/* 5 Vertical Animated Equalizer Bars in the center of the orb */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="flex items-center gap-1 h-7">
+            <div className="flex items-center gap-1 h-6">
               <span
                 className={`w-1 bg-white rounded-full transition-all duration-150 ${
-                  isPlayingAudio ? 'animate-bounce h-3.5' : isListening ? 'h-3.5 animate-pulse' : 'h-1.5 opacity-40'
+                  isPlayingAudio ? 'animate-bounce h-3' : isListening ? 'h-3 animate-pulse' : 'h-1.5 opacity-40'
                 }`}
                 style={{ animationDuration: '600ms' }}
               />
               <span
                 className={`w-1 bg-white rounded-full transition-all duration-150 ${
-                  isPlayingAudio ? 'animate-bounce h-6.5' : isListening ? 'h-6.5 animate-pulse' : 'h-2.5 opacity-60'
+                  isPlayingAudio ? 'animate-bounce h-5.5' : isListening ? 'h-5.5 animate-pulse' : 'h-2.5 opacity-60'
                 }`}
                 style={{ animationDuration: '450ms', animationDelay: '100ms' }}
               />
               <span
                 className={`w-1 bg-white rounded-full transition-all duration-150 ${
-                  isPlayingAudio ? 'animate-bounce h-5' : isListening ? 'h-5 animate-pulse' : 'h-3.5'
+                  isPlayingAudio ? 'animate-bounce h-4.5' : isListening ? 'h-4.5 animate-pulse' : 'h-3.5'
                 }`}
                 style={{ animationDuration: '520ms', animationDelay: '50ms' }}
               />
               <span
                 className={`w-1 bg-white rounded-full transition-all duration-150 ${
-                  isPlayingAudio ? 'animate-bounce h-6' : isListening ? 'h-6 animate-pulse' : 'h-2 opacity-60'
+                  isPlayingAudio ? 'animate-bounce h-5' : isListening ? 'h-5 animate-pulse' : 'h-2 opacity-60'
                 }`}
                 style={{ animationDuration: '480ms', animationDelay: '150ms' }}
               />
               <span
                 className={`w-1 bg-white rounded-full transition-all duration-150 ${
-                  isPlayingAudio ? 'animate-bounce h-3' : isListening ? 'h-3 animate-pulse' : 'h-1.5 opacity-40'
+                  isPlayingAudio ? 'animate-bounce h-2.5' : isListening ? 'h-2.5 animate-pulse' : 'h-1.5 opacity-40'
                 }`}
                 style={{ animationDuration: '580ms', animationDelay: '200ms' }}
               />
@@ -251,54 +295,78 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
           </div>
         </div>
 
-        {/* Status Text under Orb (Image 3: "Listening...") */}
-        <div className="text-sm font-medium tracking-wide text-neutral-300 mt-1 text-center">
+        {/* Status Text under Orb */}
+        <div className="text-xs font-medium tracking-wide text-neutral-300 mt-0.5 text-center">
           {statusText}
         </div>
 
-        {/* 3 Circular Action Controls (Image 3: MicOff, Large White Mic, Red PhoneOff) */}
-        <div className="flex items-center gap-5 mt-4">
-          {/* 1. Mic Mute Toggle (Left dark circular button) */}
+        {/* 3 Circular Action Controls (MicOff, Large White Mic, Red PhoneOff) */}
+        <div className="flex items-center gap-4 mt-2.5">
+          {/* 1. Mic Mute Toggle */}
           <button
             onClick={onToggleListening}
-            className="w-12 h-12 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center justify-center transition active:scale-95 shadow-md"
+            className="w-11 h-11 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-white hover:bg-neutral-800 flex items-center justify-center transition active:scale-95 shadow-md"
             title={isListening ? 'Mute microphone' : 'Unmute microphone'}
           >
             {isListening ? (
-              <MicOff className="w-5 h-5 text-neutral-400" />
+              <MicOff className="w-4.5 h-4.5 text-neutral-400" />
             ) : (
-              <Mic className="w-5 h-5 text-emerald-400" />
+              <Mic className="w-4.5 h-4.5 text-emerald-400" />
             )}
           </button>
 
-          {/* 2. Primary Large White Mic Button (Center button) */}
+          {/* 2. Primary Large White Mic Button */}
           <button
             onClick={onToggleListening}
-            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 shadow-2xl ${
+            className={`w-13 h-13 rounded-full flex items-center justify-center transition-all duration-300 active:scale-90 shadow-2xl ${
               isListening
                 ? 'bg-white text-black ring-4 ring-white/20 shadow-[0_0_25px_rgba(255,255,255,0.3)]'
                 : 'bg-neutral-800 text-neutral-300 border border-neutral-700 hover:bg-neutral-700'
             }`}
             title="Tap to talk"
           >
-            <Mic className="w-6 h-6 stroke-[2.2]" />
+            <Mic className="w-5.5 h-5.5 stroke-[2.2]" />
           </button>
 
-          {/* 3. Red End Call Button (Right red circular button) */}
+          {/* 3. Red End Call Button */}
           <button
             onClick={onClose}
-            className="w-12 h-12 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-xl flex items-center justify-center transition active:scale-95"
+            className="w-11 h-11 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-xl flex items-center justify-center transition active:scale-95"
             title="End voice chat"
           >
-            <PhoneOff className="w-5 h-5" />
+            <PhoneOff className="w-4.5 h-4.5" />
           </button>
         </div>
 
-        {/* Bottom Capsule Hint (Image 3: "Keep talking... I'm listening and ready to respond.") */}
-        <div className="mt-4">
-          <span className="inline-block px-5 py-2 rounded-full bg-neutral-950/90 border border-neutral-800/90 text-neutral-400 text-xs shadow-inner">
-            Keep talking... I'm listening and ready to respond.
-          </span>
+        {/* Integrated Chat & Link Pasting Composer */}
+        <form onSubmit={handleSendText} className="w-full max-w-xl px-6 mt-3">
+          <div className="relative bg-neutral-900/90 border border-neutral-800 rounded-full px-4 py-2 flex items-center gap-2.5 shadow-lg focus-within:border-white transition-all">
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="Chat or paste a link here..."
+              disabled={isSendingMessage}
+              className="flex-1 bg-transparent border-none outline-none text-xs text-white placeholder-neutral-500 px-1 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={!inputText.trim() || isSendingMessage}
+              className={`p-1.5 rounded-full transition active:scale-90 ${
+                inputText.trim() && !isSendingMessage
+                  ? 'bg-white text-black hover:bg-neutral-200 shadow-sm'
+                  : 'text-neutral-600 cursor-not-allowed'
+              }`}
+              title="Send text message or link"
+            >
+              <ArrowUp className="w-3.5 h-3.5 stroke-[2.5]" />
+            </button>
+          </div>
+        </form>
+
+        {/* Bottom hint caption */}
+        <div className="text-[11px] text-neutral-500 mt-1.5 text-center">
+          Speak with voice or type / paste links anytime
         </div>
       </div>
     </div>

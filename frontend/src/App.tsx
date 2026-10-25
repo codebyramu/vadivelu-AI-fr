@@ -425,6 +425,8 @@ export const App: React.FC = () => {
           transcript={speechRecognition.transcript}
           interimTranscript={speechRecognition.interimTranscript}
           onPlayMessageAudio={handlePlayMessageAudio}
+          onSendMessage={handleSendMessage}
+          isSendingMessage={isSendingMessage}
         />
       ) : (
         /* Main Chat View (macOS style window frame) */
