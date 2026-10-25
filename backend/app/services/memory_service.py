@@ -136,6 +136,7 @@ class MemoryService:
         self, prompt: str, history: Optional[List[Dict[str, Any]]] = None, limit: int = 10
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
         """Retrieve active memories and rank them by relevance to current conversation context.
+        Relevance is computed ONLY against user statements to avoid feedback loops.
 
         Returns:
             Tuple[List[Dict[str, Any]], List[str]]: (ranked_memories, highly_relevant_keys)
@@ -144,11 +145,12 @@ class MemoryService:
         if not active:
             return [], []
 
-        # Combine prompt and recent history
-        combined_text = prompt.lower()
+        # Only evaluate user prompt (and recent user messages, NOT assistant messages)
+        user_text = prompt.lower()
         if history:
             for h in history[-3:]:
-                combined_text += " " + str(h.get("content", "")).lower()
+                if h.get("role") == "user":
+                    user_text += " " + str(h.get("content", "")).lower()
 
         scored: List[Tuple[float, Dict[str, Any], bool]] = []
         highly_relevant_keys: List[str] = []
@@ -159,18 +161,18 @@ class MemoryService:
             k = m.get("key", "").lower()
             content = m.get("content", "").lower()
 
-            # Check association triggers
+            # Check association triggers only if user specifically mentions trigger words
             for assoc_key, trigger_words in self.MEMORY_KEY_ASSOCIATIONS.items():
                 if assoc_key in k:
-                    if any(tw in combined_text for tw in trigger_words):
+                    if any(tw in user_text for tw in trigger_words):
                         score += 25.0
                         is_relevant = True
                         break
 
-            # Check direct token overlap between memory content and prompt
+            # Check direct token overlap between memory content and user prompt
             content_words = [w for w in re.findall(r"\w+", content) if len(w) > 3]
             for cw in content_words:
-                if cw in combined_text:
+                if cw in user_text:
                     score += 8.0
                     is_relevant = True
 
@@ -189,26 +191,26 @@ class MemoryService:
     def format_memories_for_prompt(
         self, memories: List[Dict[str, Any]], relevant_keys: Optional[List[str]] = None
     ) -> str:
-        """Format active memories for injection into the Reaction Director prompt with explicit callback mandates."""
+        """Format active memories for injection into the Reaction Director prompt as passive background knowledge."""
         if not memories:
             return "No prior user memories recorded."
 
         rel_set = set(relevant_keys or [])
-        lines = ["[RECALLED USER MEMORIES & PERSONAL CONTEXT]:"]
+        lines = ["[BACKGROUND USER KNOWLEDGE (Passive Reference Only)]:"]
         for m in memories:
             k = m["key"]
             if k in rel_set or m.get("isRelevant"):
-                lines.append(f"- {k}: {m['content']} [HIGH CONTEXT RELEVANCE TO CONVERSATION]")
+                lines.append(f"- {k}: {m['content']} [Topic mentioned by user in current prompt]")
             else:
                 lines.append(f"- {k}: {m['content']}")
 
         if rel_set:
             lines.append(
-                "(CALLBACK MANDATE: The user's message is directly connected to their personal memories above! Naturally weave a witty, supportive, or playful callback into your spoken dialogue about this!)"
+                "(Context Note: The user's current message directly touched on one of the topics above. You may reference this knowledge naturally if relevant, but do NOT over-exaggerate or force it repeatedly.)"
             )
         else:
             lines.append(
-                "(Callback Guideline: If appropriate, naturally weave these user details into your response with comedic or supportive callbacks!)"
+                "(CRITICAL POLICY: The user's current message is UNRELATED to the memories above. DO NOT bring up, mention, or weave in any of these past facts! Keep your focus 100% on what the user is currently saying. Randomly bringing up past facts makes you sound robotic and annoying.)"
             )
         return "\n".join(lines)
 

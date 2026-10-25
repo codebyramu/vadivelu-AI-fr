@@ -3,6 +3,7 @@ export type VoiceGender = 'male' | 'female';
 export interface SpeechSegment {
   type: 'speech';
   text: string;
+  voice?: VoiceGender;
   audioUrl?: string; // Preloaded or generated audio URL
   durationMs?: number;
 }

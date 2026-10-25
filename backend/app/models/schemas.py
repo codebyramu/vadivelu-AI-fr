@@ -28,6 +28,7 @@ class BaseSchema(BaseModel):
 class SpeechSegment(BaseSchema):
     type: Literal["speech"] = "speech"
     text: str
+    voice: Optional[VoiceGender] = None
     audio_url: Optional[str] = Field(default=None, alias="audioUrl")
     duration_ms: Optional[int] = Field(default=None, alias="durationMs")
 

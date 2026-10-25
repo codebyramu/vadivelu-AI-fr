@@ -60,21 +60,34 @@ Directing Guidelines:
    - **WHEN NOT TO USE A MEME**: If the user is asking a straightforward question (e.g., general knowledge, coding, math, directions, how-to), having a calm greeting, or discussing serious/neutral topics, DO NOT insert any meme segment! Simply return natural, clear, engaging speech segments.
    - True comedic timing means knowing WHEN to punch and when to speak naturally. Never force a meme dialogue on every single turn.
 
-3. CONTEXTUAL MEMORY CALLBACKS:
-   - Inspect the RECALLED USER MEMORIES provided below.
-   - When the user's message touches on a personal topic (e.g. running/marathon training, pets, job, goals, fitness), WEAVE A NATURAL, WITTY CALLBACK into your spoken speech!
-   - Examples of callbacks: "With all that marathon training you've been putting in...", "Don't let your code bugs give you a headache!", "How is Bruno the dog doing today?"
+3. PASSIVE USER MEMORY POLICY (DO NOT SPAM USER MEMORIES):
+   - The RECALLED USER MEMORIES provided below are strictly PASSIVE BACKGROUND KNOWLEDGE.
+   - ABSOLUTE MANDATE: DO NOT randomly bring up past user facts (e.g. marathon, running, medals, workout, pets, jobs) when the user is greeting you, asking general questions, testing voices, or discussing unrelated topics!
+   - ONLY reference a memory if the user explicitly asks about it (e.g. "what do you remember about me?", "do you know what I ran?") or directly initiates conversation about that topic.
+   - Forcing user facts into unrelated turns sounds robotic, repetitive, and annoying. Keep your responses focused 100% on what the user currently asked.
 
-4. FINAL RESPONSE OUTPUT FORMAT:
+4. PER-SEGMENT MULTI-VOICE SWITCHING:
+   - You can assign a distinct voice to individual speech segments using `"voice": "female"` or `"voice": "male"`.
+   - When the user asks for multi-voice (e.g. "speak 1 line in female and other in male", "say hello in female then male", "speak in female and male voices"), YOU MUST CREATE SEPARATE SPEECH SEGMENTS WITH THEIR RESPECTIVE VOICES:
+     Example:
+     ```json
+     "segments": [
+       { "type": "speech", "text": "Hello, this is the female voice speaking first.", "voice": "female" },
+       { "type": "speech", "text": "And now, this is the male voice taking over for line two.", "voice": "male" }
+     ]
+     ```
+   - When the user asks to test voices or switch between voices, DO NOT insert unnecessary meme clips; deliver crisp, distinct spoken lines showcasing each requested voice.
+
+5. FINAL RESPONSE OUTPUT FORMAT:
    Return ONLY a strict JSON object with this exact schema:
    {
      "voice": "female" | "male",
      "emotion": "celebration" | "shock" | "irony" | "laughter" | "awkward" | "calm" | "curious" | "neutral",
-     "reasoning": "brief director notes explaining whether a meme was used or omitted and why",
+     "reasoning": "brief director notes explaining tone and segment choices",
      "segments": [
-       { "type": "speech", "text": "spoken part 1" }
+       { "type": "speech", "text": "spoken part 1", "voice": "female" | "male" }
        // Optional: { "type": "meme", "memeId": "valid_dialogue_id" } ONLY when comedically appropriate!
-       // Optional: { "type": "speech", "text": "spoken part 2" }
+       // Optional: { "type": "speech", "text": "spoken part 2", "voice": "female" | "male" }
      ],
      "newMemories": [
        { "key": "user_fact_key", "content": "description of fact" }
@@ -321,9 +334,14 @@ class ReactionDirector:
             if seg_type == "speech":
                 text = str(seg.get("text", "")).strip()
                 if text:
+                    # Resolve per-segment voice override if specified (e.g. multi-voice performance)
+                    seg_voice = seg.get("voice")
+                    if seg_voice not in ("female", "male"):
+                        seg_voice = voice
+
                     # Pre-synthesize or fetch cached audio for this speech segment on server
                     try:
-                        resolved_voice = resolve_voice(voice)
+                        resolved_voice = resolve_voice(seg_voice)
                         audio_bytes = await tts_service.synthesize(text=text, voice=resolved_voice)
                         cache_key = get_cache_key(text, resolved_voice, None, None)
                         audio_url = f"/cache/{cache_key}.mp3"
@@ -335,7 +353,14 @@ class ReactionDirector:
                         audio_url = None
                         duration_ms = tts_service.estimate_speech_duration_ms(text)
 
-                    enriched.append(SpeechSegment(text=text, audio_url=audio_url, duration_ms=duration_ms))
+                    enriched.append(
+                        SpeechSegment(
+                            text=text,
+                            voice=seg_voice,
+                            audio_url=audio_url,
+                            duration_ms=duration_ms,
+                        )
+                    )
 
             elif seg_type == "meme" and memes_enabled:
                 meme_id = seg.get("memeId")

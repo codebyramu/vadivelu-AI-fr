@@ -488,7 +488,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
           )}
 
           {/* Messages Scroll Area */}
-          <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 bg-white dark:bg-black">
+          <div className="flex-1 overflow-y-auto px-8 pt-6 pb-36 space-y-6 bg-white dark:bg-black">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto py-20 space-y-4 animate-in fade-in zoom-in-95 duration-200">
                 <div className="w-14 h-14 rounded-2xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">

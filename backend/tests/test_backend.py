@@ -985,7 +985,7 @@ class TestMemoryRetrievalAndContextCallbacks:
 
         asyncio.run(run())
 
-    def test_format_memories_with_callback_mandate(self):
+    def test_format_memories_with_passive_knowledge(self):
         async def run():
             memories = [
                 {"key": "user_training", "content": "User is training for a marathon", "isRelevant": True},
@@ -995,8 +995,8 @@ class TestMemoryRetrievalAndContextCallbacks:
                 memories, relevant_keys=["user_training"]
             )
             assert "user_training" in formatted
-            assert "[HIGH CONTEXT RELEVANCE TO CONVERSATION]" in formatted
-            assert "CALLBACK MANDATE:" in formatted
+            assert "[BACKGROUND USER KNOWLEDGE" in formatted
+            assert "Context Note:" in formatted
 
         asyncio.run(run())
 
@@ -1038,11 +1038,34 @@ class TestMemoryRetrievalAndContextCallbacks:
                     # Verify system_instruction contains both top 15 ranked dialogues and memories
                     assert "[TOP" in captured_instruction
                     assert "CONTEXTUALLY RANKED VADIVELU DIALOGUES" in captured_instruction
-                    assert "[RECALLED USER MEMORIES & PERSONAL CONTEXT]" in captured_instruction
+                    assert "[BACKGROUND USER KNOWLEDGE" in captured_instruction
                     assert "user_training" in captured_instruction
-                    assert "CALLBACK MANDATE:" in captured_instruction or "Callback" in captured_instruction
                     await db_service.delete_conversation(conv["id"])
             finally:
                 key_rotator._keys = old_keys
+
+        asyncio.run(run())
+
+    def test_multi_voice_per_segment_presynthesis(self):
+        async def run():
+            raw_segments = [
+                {"type": "speech", "text": "Line 1 in female voice", "voice": "female"},
+                {"type": "speech", "text": "Line 2 in male voice", "voice": "male"},
+            ]
+            enriched = await reaction_director._enrich_and_presynthesize_segments(
+                raw_segments=raw_segments,
+                meme_map={},
+                memes_enabled=True,
+                voice="female",
+            )
+            assert len(enriched) == 2
+            assert enriched[0].type == "speech"
+            assert enriched[0].voice == "female"
+            assert enriched[0].audio_url is not None
+            assert enriched[1].type == "speech"
+            assert enriched[1].voice == "male"
+            assert enriched[1].audio_url is not None
+            # Verify separate cache keys for distinct voices
+            assert enriched[0].audio_url != enriched[1].audio_url
 
         asyncio.run(run())

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { PerformancePlan, PerformanceSegment, MemeSegment, VoiceGender } from '../types';
+import { PerformancePlan, PerformanceSegment, SpeechSegment, MemeSegment, VoiceGender } from '../types';
 import { api } from '../services/api';
 
 export interface ActiveMemeInfo {
@@ -246,10 +246,11 @@ export function useAudioPerformance(options?: {
 
         if (seg.type === 'speech') {
           let url = seg.audioUrl;
+          const segmentVoice = (seg as SpeechSegment).voice || plan.voice || 'female';
           // If not pre-synthesized by server, synthesize now
           if (!url) {
             try {
-              url = await api.synthesizeTTS(seg.text, plan.voice || 'female');
+              url = await api.synthesizeTTS(seg.text, segmentVoice);
             } catch (err) {
               loggerWarn('TTS synthesis error during preload:', err);
               url = undefined;
@@ -300,7 +301,8 @@ export function useAudioPerformance(options?: {
           if (item.audio) {
             await playPreloadedAudio(item.audio, speechVolumeRef.current);
           } else if (item.textToSpeakFallback) {
-            await speakWithBrowserSpeech(item.textToSpeakFallback, plan.voice);
+            const segVoice = (segment as SpeechSegment).voice || plan.voice;
+            await speakWithBrowserSpeech(item.textToSpeakFallback, segVoice);
           }
         } else if (segment.type === 'meme') {
           const memeSeg = segment as MemeSegment;
