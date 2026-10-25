@@ -10,6 +10,8 @@ import { CommandPalette } from './components/CommandPalette';
 import { MemeLibraryModal } from './components/MemeLibraryModal';
 import { MemoryModal } from './components/MemoryModal';
 import { SettingsModal } from './components/SettingsModal';
+import { InteractiveCursor } from './components/InteractiveCursor';
+import { ToastNotification, ToastItem, ToastType } from './components/ToastNotification';
 
 export const App: React.FC = () => {
   // Views & Modals
@@ -19,6 +21,20 @@ export const App: React.FC = () => {
   const [isMemeLibraryOpen, setIsMemeLibraryOpen] = useState(false);
   const [isMemoryModalOpen, setIsMemoryModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  // Toast Notification System
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const showToast = useCallback((message: string, type: ToastType = 'info', duration: number = 3200) => {
+    const id = `toast-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setToasts(prev => [...prev, { id, message, type, duration }]);
+  }, []);
+
+  const dismissToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  // Sending Message Loading Indicator
+  const [isSendingMessage, setIsSendingMessage] = useState(false);
 
   // Theme State & System Preference Tracking
   const [themeChoice, setThemeChoice] = useState<'light' | 'dark' | 'system'>(() => {
@@ -196,6 +212,7 @@ export const App: React.FC = () => {
       createdAt: new Date().toISOString(),
     };
     setMessages(prev => [...prev, tempUserMsg]);
+    setIsSendingMessage(true);
 
     try {
       const activeConv = conversations.find(c => c.id === currentConvId);
@@ -230,6 +247,7 @@ export const App: React.FC = () => {
       }
     } catch (e: any) {
       console.error('Gemini chat request failed:', e);
+      showToast('Gemini API Error: Check settings', 'error');
       // Display the true server error message instead of fake content
       const errorMsg: Message = {
         id: `err-${Date.now()}`,
@@ -239,6 +257,8 @@ export const App: React.FC = () => {
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, errorMsg]);
+    } finally {
+      setIsSendingMessage(false);
     }
   }, [activeConversationId, conversations, settings, isVoiceMode, isMiniVoiceOpen, audioPerformance]);
 
@@ -380,6 +400,15 @@ export const App: React.FC = () => {
           isListening={speechRecognition.isListening}
           themeChoice={themeChoice}
           onToggleTheme={handleToggleTheme}
+          isSendingMessage={isSendingMessage}
+          playbackStatus={audioPerformance.status}
+          activeMeme={audioPerformance.activeMeme}
+          onInterruptAudio={() => {
+            audioPerformance.interrupt();
+            setPlayingMessageId(null);
+          }}
+          onShowToast={showToast}
+          isDarkTheme={isDark}
         />
       )}
 
@@ -473,6 +502,16 @@ export const App: React.FC = () => {
         themeChoice={themeChoice}
         onSelectTheme={handleSelectTheme}
         onToggleTheme={handleToggleTheme}
+      />
+
+      {/* Interactive Cursor with scale, blend mode and text badges */}
+      <InteractiveCursor isDarkTheme={isDark} />
+
+      {/* Floating Apple-aesthetic Monochrome Toast Notifications */}
+      <ToastNotification
+        toasts={toasts}
+        onDismiss={dismissToast}
+        isDarkTheme={isDark}
       />
     </div>
   );

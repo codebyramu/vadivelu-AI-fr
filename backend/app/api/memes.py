@@ -1,12 +1,38 @@
 """Meme Catalog and Soundboard APIs."""
 
-from typing import List
-from fastapi import APIRouter, HTTPException
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Query
 
 from app.models.schemas import MemeCreate, MemeMetadata, MemeUpdate
 from app.services.meme_service import meme_service
 
 router = APIRouter(prefix="/api/memes", tags=["Memes"])
+dialogues_router = APIRouter(prefix="/api/dialogues", tags=["Dialogues"])
+
+
+@router.get("/search", response_model=List[MemeMetadata])
+@dialogues_router.get("/search", response_model=List[MemeMetadata])
+async def search_dialogues(
+    query: Optional[str] = Query(default=None, description="Search text across dialogue, translation, title, tags"),
+    emotion: Optional[str] = Query(default=None, description="Filter by emotion/feeling"),
+    tag: Optional[str] = Query(default=None, description="Filter by specific situation or emotion tag"),
+    status: Optional[str] = Query(default=None, description="Filter by status: 'available', 'cooldown', or 'all'"),
+    limit: int = Query(default=50, ge=1, le=200, description="Max results to return"),
+):
+    """Search dialogues and memes with full metadata, duration, tags, and availability status."""
+    return await meme_service.search_memes(
+        query=query,
+        emotion=emotion,
+        tag=tag,
+        status=status,
+        limit=limit,
+    )
+
+
+@dialogues_router.get("", response_model=List[MemeMetadata])
+async def list_dialogues():
+    """List all dialogues from Supabase and soundboard catalog."""
+    return await meme_service.list_memes()
 
 
 @router.get("", response_model=List[MemeMetadata])

@@ -32,6 +32,89 @@ class MemeService:
         memes = await self.list_memes()
         return [m for m in memes if m.get("isAvailableNow", True)]
 
+    async def search_memes(
+        self,
+        query: Optional[str] = None,
+        emotion: Optional[str] = None,
+        tag: Optional[str] = None,
+        status: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Search and filter dialogues/memes with full metadata, duration, tags, and status."""
+        items = await self.list_memes()
+
+        q = query.strip().lower() if query else None
+        emo = emotion.strip().lower() if emotion else None
+        t = tag.strip().lower() if tag else None
+        stat = status.strip().lower() if status else None
+
+        filtered = []
+        for m in items:
+            # Status filter: 'available', 'cooldown', or 'all'
+            is_avail = m.get("isAvailableNow", True)
+            if stat == "available" and not is_avail:
+                continue
+            if stat == "cooldown" and is_avail:
+                continue
+
+            # Emotion filter
+            if emo:
+                item_emo = (m.get("emotion") or "").lower()
+                emo_tags = [str(x).lower() for x in m.get("emotionTags", [])]
+                all_tags = [str(x).lower() for x in m.get("tags", [])]
+                if emo not in item_emo and not any(emo in x for x in (emo_tags + all_tags)):
+                    continue
+
+            # Tag filter
+            if t:
+                all_tags = [str(x).lower() for x in m.get("tags", [])]
+                sit_tags = [str(x).lower() for x in m.get("situationTags", [])]
+                emo_tags = [str(x).lower() for x in m.get("emotionTags", [])]
+                combined_tags = all_tags + sit_tags + emo_tags
+                if not any(t in tag_val for tag_val in combined_tags):
+                    continue
+
+            # Query filter (matches title, lineText, lineTranslation, contextHint, id, tags)
+            if q:
+                title = (m.get("title") or "").lower()
+                line_text = (m.get("lineText") or "").lower()
+                line_trans = (m.get("lineTranslation") or "").lower()
+                context = (m.get("contextHint") or "").lower()
+                m_id = (m.get("id") or "").lower()
+                all_tags = [str(x).lower() for x in m.get("tags", [])]
+
+                matches_query = (
+                    q in title
+                    or q in line_text
+                    or q in line_trans
+                    or q in context
+                    or q in m_id
+                    or any(q in tag_val for tag_val in all_tags)
+                )
+                if not matches_query:
+                    continue
+
+            filtered.append(m)
+
+        return filtered[:limit]
+
+    async def rank_dialogues(
+        self,
+        prompt: Optional[str] = None,
+        emotion: Optional[str] = None,
+        personality: Optional[str] = None,
+        limit: int = 15,
+    ) -> List[Dict[str, Any]]:
+        """Rank all dialogues (Supabase + local) by intelligent fuzzy/semantic relevance and return top `limit`."""
+        all_items = await self.list_memes()
+        return await supabase_dialogue_service.rank_dialogues(
+            dialogues=all_items,
+            prompt=prompt,
+            emotion=emotion,
+            personality=personality,
+            limit=limit,
+        )
+
     async def record_usage(self, meme_id: str) -> None:
         """Mark meme as used right now to trigger cooldown."""
         if supabase_dialogue_service.is_configured:
@@ -94,19 +177,10 @@ class MemeService:
         return await db_service.delete_meme(meme_id)
 
     def format_memes_for_director(self, memes: List[Dict[str, Any]]) -> str:
-        """Format available dialogues as a concise reference table for the Reaction Director prompt."""
+        """Format available dialogues as a prioritized reference table for the Reaction Director prompt."""
         if not memes:
             return "No memes or dialogues are currently available."
-
-        lines = []
-        for m in memes[:40]:  # Give director top matches to keep prompt focused
-            status = "AVAILABLE" if m.get("isAvailableNow", True) else "ON COOLDOWN"
-            line_txt = m.get("lineText") or m.get("title", "")
-            translation = m.get("lineTranslation") or m.get("contextHint", "")
-            lines.append(
-                f"- ID: '{m['id']}' | Dialogue: \"{line_txt}\" | English: \"{translation}\" | Emotion: {m.get('emotion', 'comedy')} | Status: {status}"
-            )
-        return "\n".join(lines)
+        return supabase_dialogue_service.format_ranked_dialogues_for_director(memes)
 
 
 meme_service = MemeService()

@@ -29,6 +29,7 @@ class SpeechSegment(BaseSchema):
     type: Literal["speech"] = "speech"
     text: str
     audio_url: Optional[str] = Field(default=None, alias="audioUrl")
+    duration_ms: Optional[int] = Field(default=None, alias="durationMs")
 
 
 class MemeSegment(BaseSchema):
@@ -105,6 +106,11 @@ class MemeMetadata(BaseSchema):
     use_count: int = Field(default=0, alias="useCount")
     is_favorite: bool = Field(default=False, alias="isFavorite")
     is_available_now: bool = Field(default=True, alias="isAvailableNow")
+    remaining_cooldown: Optional[int] = Field(default=0, alias="remainingCooldown")
+    line_text: Optional[str] = Field(default=None, alias="lineText")
+    line_translation: Optional[str] = Field(default=None, alias="lineTranslation")
+    intensity: Optional[str] = Field(default=None, alias="intensity")
+    status: Optional[str] = Field(default="available", alias="status")
 
 
 class MemeCreate(BaseSchema):

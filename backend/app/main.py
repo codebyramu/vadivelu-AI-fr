@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from app.api.chat import router as chat_router
 from app.api.conversations import router as conv_router
 from app.api.health import router as health_router
+from app.api.memes import dialogues_router
 from app.api.memes import router as memes_router
 from app.api.memories import router as memories_router
 from app.api.settings import router as settings_router
@@ -73,6 +74,7 @@ app.include_router(tts_router)
 app.include_router(conv_router)
 app.include_router(memories_router)
 app.include_router(memes_router)
+app.include_router(dialogues_router)
 app.include_router(settings_router)
 
 

@@ -538,16 +538,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <h4 className="text-xs font-semibold text-black dark:text-white">Meme Audio Clips</h4>
                   <p className="text-[11px] text-neutral-500 dark:text-neutral-400">Play iconic audio soundbites interleaved with speech</p>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={localSettings.memesEnabled}
-                  onChange={e => {
-                    const checked = e.target.checked;
-                    setLocalSettings(s => ({ ...s, memesEnabled: checked }));
-                    onSaveSettings({ memesEnabled: checked });
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !localSettings.memesEnabled;
+                    setLocalSettings(s => ({ ...s, memesEnabled: next }));
+                    onSaveSettings({ memesEnabled: next });
                   }}
-                  className="w-4 h-4 accent-black dark:accent-white rounded cursor-pointer"
-                />
+                  className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out relative flex items-center p-0.5 cursor-pointer ${
+                    localSettings.memesEnabled
+                      ? 'bg-black dark:bg-white'
+                      : 'bg-neutral-300 dark:bg-neutral-700'
+                  }`}
+                  role="switch"
+                  aria-checked={localSettings.memesEnabled}
+                >
+                  <span
+                    className={`w-5 h-5 rounded-full transition-transform duration-200 ease-out shadow-sm ${
+                      localSettings.memesEnabled
+                        ? 'translate-x-5 bg-white dark:bg-black'
+                        : 'translate-x-0 bg-white dark:bg-neutral-400'
+                    }`}
+                  />
+                </button>
               </div>
 
               <div className="flex items-center justify-between p-4 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950">
@@ -555,16 +568,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                   <h4 className="text-xs font-semibold text-black dark:text-white">Long-Term Memory Engine</h4>
                   <p className="text-[11px] text-neutral-500 dark:text-neutral-400">Extract facts and retain user preferences across chats</p>
                 </div>
-                <input
-                  type="checkbox"
-                  checked={localSettings.memoryEnabled}
-                  onChange={e => {
-                    const checked = e.target.checked;
-                    setLocalSettings(s => ({ ...s, memoryEnabled: checked }));
-                    onSaveSettings({ memoryEnabled: checked });
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !localSettings.memoryEnabled;
+                    setLocalSettings(s => ({ ...s, memoryEnabled: next }));
+                    onSaveSettings({ memoryEnabled: next });
                   }}
-                  className="w-4 h-4 accent-black dark:accent-white rounded cursor-pointer"
-                />
+                  className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out relative flex items-center p-0.5 cursor-pointer ${
+                    localSettings.memoryEnabled
+                      ? 'bg-black dark:bg-white'
+                      : 'bg-neutral-300 dark:bg-neutral-700'
+                  }`}
+                  role="switch"
+                  aria-checked={localSettings.memoryEnabled}
+                >
+                  <span
+                    className={`w-5 h-5 rounded-full transition-transform duration-200 ease-out shadow-sm ${
+                      localSettings.memoryEnabled
+                        ? 'translate-x-5 bg-white dark:bg-black'
+                        : 'translate-x-0 bg-white dark:bg-neutral-400'
+                    }`}
+                  />
+                </button>
               </div>
             </div>
           )}

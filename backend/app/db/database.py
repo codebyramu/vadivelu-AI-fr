@@ -576,11 +576,14 @@ class DatabaseService:
                 pass
             last_used = r["last_used_at"]
             is_available = True
+            remaining_cooldown = 0
             if last_used:
                 try:
                     last_ts = datetime.fromisoformat(last_used).timestamp()
-                    if (now_ts - last_ts) < r["cooldown_seconds"]:
+                    diff = now_ts - last_ts
+                    if diff < r["cooldown_seconds"]:
                         is_available = False
+                        remaining_cooldown = int(r["cooldown_seconds"] - diff)
                 except Exception:
                     pass
 
@@ -600,6 +603,8 @@ class DatabaseService:
                     "useCount": r["use_count"],
                     "isFavorite": bool(r["is_favorite"]),
                     "isAvailableNow": is_available,
+                    "remainingCooldown": remaining_cooldown,
+                    "status": "available" if is_available else "cooldown",
                 }
             )
         return results
@@ -622,11 +627,14 @@ class DatabaseService:
             pass
         now_ts = datetime.now(timezone.utc).timestamp()
         is_available = True
+        remaining_cooldown = 0
         if r["last_used_at"]:
             try:
                 last_ts = datetime.fromisoformat(r["last_used_at"]).timestamp()
-                if (now_ts - last_ts) < r["cooldown_seconds"]:
+                diff = now_ts - last_ts
+                if diff < r["cooldown_seconds"]:
                     is_available = False
+                    remaining_cooldown = int(r["cooldown_seconds"] - diff)
             except Exception:
                 pass
 
@@ -645,6 +653,8 @@ class DatabaseService:
             "useCount": r["use_count"],
             "isFavorite": bool(r["is_favorite"]),
             "isAvailableNow": is_available,
+            "remainingCooldown": remaining_cooldown,
+            "status": "available" if is_available else "cooldown",
         }
 
     async def get_meme(self, meme_id: str) -> Optional[Dict[str, Any]]:

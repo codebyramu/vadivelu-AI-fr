@@ -38,6 +38,7 @@ from app.services.gemini_service import gemini_service
 from app.services.meme_service import meme_service
 from app.services.memory_service import memory_service
 from app.services.reaction_director import reaction_director
+from app.services.supabase_service import supabase_dialogue_service
 from app.services.tts_service import tts_service
 
 
@@ -320,6 +321,35 @@ class TestTTSEngine:
 
         asyncio.run(run())
 
+    def test_audio_duration_calculation(self):
+        async def run():
+            text = "Testing exact audio duration calculation in milliseconds."
+            audio = await tts_service.synthesize(text, gender="female")
+            assert len(audio) > 0
+
+            # Test exact duration parsing from audio bytes
+            dur_ms = tts_service.get_audio_duration_ms(audio)
+            assert dur_ms > 0
+            assert isinstance(dur_ms, int)
+
+            # Test synthesize_with_duration
+            audio_bytes, dur2 = await tts_service.synthesize_with_duration(text, gender="female")
+            assert len(audio_bytes) > 0
+            assert dur2 == dur_ms
+
+            # Test text estimation
+            est_dur = tts_service.estimate_speech_duration_ms(text)
+            assert est_dur > 0
+
+            # Test known dialogue clip duration
+            known_dur = tts_service.get_audio_duration_ms("5dbb8a7a-7b09-49c8-93bc-b887a944d6f6")
+            assert known_dur == 3840
+
+            # Test empty bytes returns 0
+            assert tts_service.get_audio_duration_ms(b"") == 0
+
+        asyncio.run(run())
+
 
 # ============================================================================
 # 4. Seed Meme Library Tests
@@ -453,6 +483,14 @@ class TestReactionDirector:
                     assert "speech" in segment_types
                     assert "meme" in segment_types
                     assert any(s.type == "meme" and s.meme_id == "kalakkunga" for s in plan.segments)
+                    # Verify accurate durationMs on both speech and meme segments
+                    for seg in plan.segments:
+                        assert seg.duration_ms is not None
+                        assert seg.duration_ms > 0
+                    dumped = plan.model_dump(by_alias=True)
+                    for seg_dict in dumped["segments"]:
+                        assert "durationMs" in seg_dict
+                        assert seg_dict["durationMs"] > 0
                     await db_service.delete_conversation(conv["id"])
             finally:
                 key_rotator._keys = old_keys
@@ -737,6 +775,36 @@ class TestAPIEndpoints:
         # Clean up
         asyncio.run(meme_service.delete_meme("test_api_meme"))
 
+    def test_dialogues_and_memes_search_api(self, client: TestClient):
+        # 1. Search without params on /api/dialogues/search
+        res = client.get("/api/dialogues/search")
+        assert res.status_code == 200
+        items = res.json()
+        assert isinstance(items, list)
+        if len(items) > 0:
+            first = items[0]
+            assert "id" in first
+            assert "title" in first
+            assert "durationMs" in first
+            assert first["durationMs"] > 0
+            assert "status" in first
+            assert first["status"] in ("available", "cooldown")
+            assert "tags" in first
+            assert isinstance(first["tags"], list)
+
+        # 2. Search on /api/memes/search
+        res_memes = client.get("/api/memes/search", params={"query": "Muruga"})
+        assert res_memes.status_code == 200
+        muruga_items = res_memes.json()
+        assert isinstance(muruga_items, list)
+
+        # 3. Search with status filter
+        res_avail = client.get("/api/dialogues/search", params={"status": "available"})
+        assert res_avail.status_code == 200
+        for item in res_avail.json():
+            assert item["isAvailableNow"] is True
+            assert item["status"] == "available"
+
     def test_settings_api(self, client: TestClient):
         res_get = client.get("/api/settings")
         assert res_get.status_code == 200
@@ -763,3 +831,218 @@ class TestAPIEndpoints:
         finally:
             if test_file.exists():
                 test_file.unlink()
+
+
+# ============================================================================
+# 8. Dialogue Relevance Ranker & Semantic Scoring Tests
+# ============================================================================
+
+
+class TestDialogueRelevanceRanker:
+    """Test fuzzy/semantic relevance ranking algorithm in SupabaseDialogueService."""
+
+    @pytest.fixture(autouse=True)
+    def reset_cooldowns(self):
+        supabase_dialogue_service.reset_cooldowns()
+
+    def test_token_overlap_ranking(self):
+        async def run():
+            # Query containing argument and fight keywords
+            ranked = await supabase_dialogue_service.rank_dialogues(
+                prompt="Why are you two fighting and arguing in the marketplace?",
+                emotion="argument",
+                limit=5,
+            )
+            assert len(ranked) > 0
+            # Top ranked dialogue should match argument/conflict tags or text
+            top = ranked[0]
+            assert top["relevanceScore"] > 30.0
+            assert top["emotion"] in ("angry", "annoyed") or "argument" in top.get("tags", [])
+            # Should have reasons explaining match
+            assert len(top.get("relevanceReasons", [])) > 0
+
+        asyncio.run(run())
+
+    def test_emotion_priority_weighting(self):
+        async def run():
+            # Test celebration weighting
+            celeb_ranked = await supabase_dialogue_service.rank_dialogues(
+                prompt="We are ready for the grand stage performance!",
+                emotion="celebration",
+                limit=3,
+            )
+            assert len(celeb_ranked) > 0
+            top_celeb = celeb_ranked[0]
+            assert top_celeb["emotion"] in ("enthusiastic", "happy", "celebration") or any(
+                t in ("stage performance", "enthusiastic") for t in top_celeb.get("tags", [])
+            )
+
+            # Test frustration weighting
+            frust_ranked = await supabase_dialogue_service.rank_dialogues(
+                prompt="Waking up in the morning is such a frustrating struggle!",
+                emotion="frustration",
+                limit=3,
+            )
+            assert len(frust_ranked) > 0
+            top_frust = frust_ranked[0]
+            assert "frustrated" in top_frust["emotion"] or "morning struggle" in top_frust.get("tags", [])
+
+        asyncio.run(run())
+
+    def test_anti_repetition_and_diversity_penalty(self):
+        async def run():
+            # Get initial top dialogue for drama
+            prompt = "What kind of terrible atrocity is this suffering?"
+            initial_ranked = await supabase_dialogue_service.rank_dialogues(
+                prompt=prompt, emotion="drama", limit=3
+            )
+            top_dialogue = initial_ranked[0]
+            top_id = top_dialogue["id"]
+            initial_score = top_dialogue["relevanceScore"]
+
+            # Record usage to trigger cooldown and recent history penalty
+            supabase_dialogue_service.record_usage(top_id)
+
+            # Re-rank with same prompt
+            reranked = await supabase_dialogue_service.rank_dialogues(
+                prompt=prompt, emotion="drama", limit=3
+            )
+            # The used dialogue should now be penalized and have isAvailableNow = False
+            penalized_item = next((d for d in reranked if d["id"] == top_id), None)
+            if penalized_item:
+                assert penalized_item["relevanceScore"] < initial_score
+                assert penalized_item["isAvailableNow"] is False
+
+            # Top dialogue now must be available and distinct
+            assert reranked[0]["id"] != top_id
+            assert reranked[0]["isAvailableNow"] is True
+
+        asyncio.run(run())
+
+    def test_signature_phrase_trigger(self):
+        async def run():
+            # Mention Kaippulla
+            ranked = await supabase_dialogue_service.rank_dialogues(
+                prompt="Hello, is this Kaippulla speaking? Sanga thalaivar!",
+                limit=3,
+            )
+            top = ranked[0]
+            assert top["id"].startswith("1f079e82")
+            assert "Kaippulla" in top["lineText"]
+            assert any("Signature Vadivelu phrase" in r for r in top["relevanceReasons"])
+
+        asyncio.run(run())
+
+    def test_top_15_ranked_dialogues_limit(self):
+        async def run():
+            ranked = await supabase_dialogue_service.rank_dialogues(
+                prompt="Tell me something hilarious and funny!",
+                emotion="comedy",
+                limit=15,
+            )
+            assert len(ranked) <= 15
+            # Ensure strictly ordered by relevanceScore descending
+            scores = [d["relevanceScore"] for d in ranked]
+            assert scores == sorted(scores, reverse=True)
+
+        asyncio.run(run())
+
+    def test_dialogue_format_for_director(self):
+        async def run():
+            ranked = await supabase_dialogue_service.rank_dialogues(limit=5)
+            formatted = supabase_dialogue_service.format_ranked_dialogues_for_director(ranked)
+            assert "[TOP" in formatted
+            assert "CONTEXTUALLY RANKED VADIVELU DIALOGUES" in formatted
+            assert "ID:" in formatted
+            assert "Score:" in formatted
+
+        asyncio.run(run())
+
+
+# ============================================================================
+# 9. Long-Term Memory Retrieval & Context Callbacks Tests
+# ============================================================================
+
+
+class TestMemoryRetrievalAndContextCallbacks:
+    """Test memory relevance ranking, callback prompt formatting, and director prompt injection."""
+
+    def test_retrieve_relevant_memories_associations(self):
+        async def run():
+            # Seed a training memory
+            await memory_service.create_memory(
+                key="user_training",
+                content="User is training for a marathon running competition",
+            )
+            # Retrieve with prompt mentioning running / race
+            ranked, relevant_keys = await memory_service.retrieve_relevant_memories(
+                prompt="I just finished a 10k run and won a trophy!",
+            )
+            assert "user_training" in relevant_keys
+            top_mem = ranked[0]
+            assert top_mem["key"] == "user_training"
+            assert top_mem["isRelevant"] is True
+
+        asyncio.run(run())
+
+    def test_format_memories_with_callback_mandate(self):
+        async def run():
+            memories = [
+                {"key": "user_training", "content": "User is training for a marathon", "isRelevant": True},
+                {"key": "user_pet", "content": "User has a golden retriever", "isRelevant": False},
+            ]
+            formatted = memory_service.format_memories_for_prompt(
+                memories, relevant_keys=["user_training"]
+            )
+            assert "user_training" in formatted
+            assert "[HIGH CONTEXT RELEVANCE TO CONVERSATION]" in formatted
+            assert "CALLBACK MANDATE:" in formatted
+
+        asyncio.run(run())
+
+    def test_director_injects_ranked_dialogues_and_memories(self):
+        async def run():
+            # Seed user memory
+            await memory_service.create_memory(
+                key="user_training",
+                content="User is training for an international marathon",
+            )
+            mock_gemini_json = json.dumps({
+                "voice": "female",
+                "emotion": "celebration",
+                "reasoning": "User won the marathon, making callback",
+                "segments": [
+                    {"type": "speech", "text": "All that marathon training really paid off! Super performance!"}
+                ],
+                "newMemories": []
+            })
+            captured_instruction = ""
+
+            async def mock_generate_content(*args, **kwargs):
+                nonlocal captured_instruction
+                captured_instruction = kwargs.get("system_instruction", "")
+                return mock_gemini_json, "Key-1"
+
+            old_keys = key_rotator._keys
+            key_rotator._keys = [KeyInfo(alias="Key-1", secret="test_key_123")]
+            try:
+                with patch.object(gemini_service, "generate_content", side_effect=mock_generate_content):
+                    conv = await db_service.create_conversation(title="Callback Test")
+                    plan, _, _ = await reaction_director.plan_performance(
+                        user_message="I won the marathon race today!",
+                        conversation_id=conv["id"],
+                        history=[],
+                        personality="high_energy",
+                    )
+                    assert plan is not None
+                    # Verify system_instruction contains both top 15 ranked dialogues and memories
+                    assert "[TOP" in captured_instruction
+                    assert "CONTEXTUALLY RANKED VADIVELU DIALOGUES" in captured_instruction
+                    assert "[RECALLED USER MEMORIES & PERSONAL CONTEXT]" in captured_instruction
+                    assert "user_training" in captured_instruction
+                    assert "CALLBACK MANDATE:" in captured_instruction or "Callback" in captured_instruction
+                    await db_service.delete_conversation(conv["id"])
+            finally:
+                key_rotator._keys = old_keys
+
+        asyncio.run(run())

@@ -51,18 +51,17 @@ Directing Guidelines:
      * calm_supportive: Gentle, encouraging, comforting.
      * study_technical: Precise, clear, structured.
 
-2. INTELLIGENT MEME SELECTION VIA TOOLS:
-   - You have access to real tools:
-     * `search_meme_library(query, emotion)`: Search the soundboard by keyword or emotion.
-     * `list_available_memes()`: List all memes currently ready and not on cooldown.
-     * `lookup_user_memories(topic)`: Retrieve long-term memories and facts about the user.
-   - When a user's context, victory, financial move, shocking news, or joke would genuinely be improved by a meme reaction, CALL `search_meme_library` to find the most fitting clip.
-   - Intelligently decide whether to use a meme, which meme fits best, and where to place it between your spoken words.
+2. TOP 15 CONTEXTUALLY RANKED VADIVELU DIALOGUES:
+   - You are provided with the Top 15 most contextually relevant Vadivelu dialogues from the Supabase soundboard, ranked using intelligent fuzzy matching, situation token overlap, and emotion weighting.
+   - When a user's context, victory, conflict, frustration, romance, or shock calls for a reaction, pick a fitting ID directly from these top 15 dialogues.
+   - Intelligently place the meme between your spoken speech segments (e.g. Speech -> Meme -> Speech or Speech -> Meme).
    - If no meme fits or the situation is serious, do NOT force a meme; simply speak naturally.
-   - NEVER invent fake meme IDs. Only use IDs returned by the tool.
+   - NEVER invent fake meme IDs. Only use authentic IDs from the provided catalog.
 
-3. CONTEXTUAL CALLBACKS:
-   - When appropriate, connect recalled user memories (training, goals, pets, job) into your speech naturally.
+3. CONTEXTUAL MEMORY CALLBACKS:
+   - Carefully inspect the RECALLED USER MEMORIES provided below.
+   - If the user's message touches on a personal topic (e.g. running/marathon training, pets, job, goals, fitness), WEAVE A NATURAL, WITTY CALLBACK into your spoken speech!
+   - Examples of callbacks: "With all that marathon training you've been putting in...", "Don't let your code bugs give you a headache!", "How is Bruno the dog doing today?"
 
 4. FINAL RESPONSE OUTPUT FORMAT:
    Return ONLY a strict JSON object with this exact schema:
@@ -72,7 +71,7 @@ Directing Guidelines:
      "reasoning": "brief director notes explaining tone and placement",
      "segments": [
        { "type": "speech", "text": "spoken part 1" },
-       { "type": "meme", "memeId": "valid_meme_id_from_tool" },
+       { "type": "meme", "memeId": "valid_dialogue_id" },
        { "type": "speech", "text": "spoken part 2" }
      ],
      "newMemories": [
@@ -149,14 +148,32 @@ class ReactionDirector:
 
         all_memes = await meme_service.list_memes()
         meme_map = {m["id"]: m for m in all_memes}
-        memes_catalog_text = meme_service.format_memes_for_director(all_memes)
+
+        # Rank dialogues to select top 15 most contextually relevant
+        ranked_dialogues = await meme_service.rank_dialogues(
+            prompt=user_message,
+            personality=personality,
+            limit=15,
+        )
+        dialogues_catalog_text = meme_service.format_memes_for_director(ranked_dialogues)
+
+        # Retrieve long-term memories with semantic relevance scoring
+        active_memories, relevant_memory_keys = await memory_service.retrieve_relevant_memories(
+            prompt=user_message,
+            history=history,
+            limit=10,
+        )
+        memories_text = memory_service.format_memories_for_prompt(
+            active_memories, relevant_keys=relevant_memory_keys
+        )
 
         system_instruction = (
             f"{DIRECTOR_SYSTEM_PROMPT}\n\n"
             f"Active Personality Preset: {personality}\n"
             f"Default Voice Tone: {default_voice}\n"
             f"Memes Enabled Status: {'YES' if memes_enabled else 'DISABLED by user settings'}\n\n"
-            f"AVAILABLE REAL VADIVELU DIALOGUES CATALOG (FROM SUPABASE):\n{memes_catalog_text}\n"
+            f"{memories_text}\n\n"
+            f"{dialogues_catalog_text}\n"
         )
 
         # Build contents from recent history + new message
@@ -233,14 +250,18 @@ class ReactionDirector:
                     # Pre-synthesize or fetch cached audio for this speech segment on server
                     try:
                         resolved_voice = resolve_voice(voice)
-                        await tts_service.synthesize(text=text, voice=resolved_voice)
+                        audio_bytes = await tts_service.synthesize(text=text, voice=resolved_voice)
                         cache_key = get_cache_key(text, resolved_voice, None, None)
                         audio_url = f"/cache/{cache_key}.mp3"
+                        duration_ms = tts_service.get_audio_duration_ms(audio_bytes) if audio_bytes else 0
+                        if duration_ms <= 0:
+                            duration_ms = tts_service.estimate_speech_duration_ms(text)
                     except Exception as e:
                         logger.warning(f"Server-side pre-synthesis failed for text '{text[:20]}...': {e}")
                         audio_url = None
+                        duration_ms = tts_service.estimate_speech_duration_ms(text)
 
-                    enriched.append(SpeechSegment(text=text, audio_url=audio_url))
+                    enriched.append(SpeechSegment(text=text, audio_url=audio_url, duration_ms=duration_ms))
 
             elif seg_type == "meme" and memes_enabled:
                 meme_id = seg.get("memeId")
@@ -249,13 +270,19 @@ class ReactionDirector:
                 if meme and meme.get("isAvailableNow", True):
                     # Trigger cooldown
                     await meme_service.record_usage(meme_id)
+                    dur_ms = meme.get("durationMs")
+                    if not dur_ms or dur_ms <= 0:
+                        dur_ms = tts_service.get_audio_duration_ms(meme.get("audioUrl") or meme.get("filePath") or meme_id)
+                    if not dur_ms or dur_ms <= 0:
+                        dur_ms = 1800
+
                     enriched.append(
                         MemeSegment(
                             meme_id=meme_id,
-                            title=meme["title"],
-                            audio_url=meme["audioUrl"],
+                            title=meme.get("title") or meme.get("lineText") or meme_id,
+                            audio_url=meme.get("audioUrl"),
                             thumbnail_url=meme.get("thumbnailUrl"),
-                            duration_ms=meme.get("durationMs", 1800),
+                            duration_ms=dur_ms,
                         )
                     )
                 else:
@@ -268,12 +295,16 @@ class ReactionDirector:
             fallback_text = "I am listening! How can I help you next?"
             try:
                 resolved_voice = resolve_voice(voice)
-                await tts_service.synthesize(text=fallback_text, voice=resolved_voice)
+                audio_bytes = await tts_service.synthesize(text=fallback_text, voice=resolved_voice)
                 cache_key = get_cache_key(fallback_text, resolved_voice, None, None)
                 fallback_url = f"/cache/{cache_key}.mp3"
+                fallback_dur = tts_service.get_audio_duration_ms(audio_bytes) if audio_bytes else 0
+                if fallback_dur <= 0:
+                    fallback_dur = tts_service.estimate_speech_duration_ms(fallback_text)
             except Exception:
                 fallback_url = None
-            enriched.append(SpeechSegment(text=fallback_text, audio_url=fallback_url))
+                fallback_dur = tts_service.estimate_speech_duration_ms(fallback_text)
+            enriched.append(SpeechSegment(text=fallback_text, audio_url=fallback_url, duration_ms=fallback_dur))
 
         return enriched
 

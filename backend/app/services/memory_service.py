@@ -17,6 +17,11 @@ class MemoryService:
             "User is training for {}",
         ),
         (
+            r"\b(?:i(?:'m| am)?\s+running\s+(?:a\s+)?)(marathon|competition|race|5k|10k)\b",
+            "user_training",
+            "User is running a {}",
+        ),
+        (
             r"\b(?:i(?:'m| am| was)?\s+preparing\s+(?:for|to)\s+)([^.,!?;]+)",
             "user_goal",
             "User is preparing for {}",
@@ -117,17 +122,94 @@ class MemoryService:
             created_keys.append(key)
         return created_keys
 
-    def format_memories_for_prompt(self, memories: List[Dict[str, Any]]) -> str:
-        """Format active memories for injection into the Reaction Director prompt."""
+    # Keywords associated with memory keys for intelligent context callbacks
+    MEMORY_KEY_ASSOCIATIONS = {
+        "user_training": ["run", "running", "marathon", "training", "exercise", "race", "competition", "gold medal", "trophy", "fast", "legs", "fitness", "track"],
+        "user_profession": ["work", "job", "office", "code", "programming", "developer", "engineer", "software", "bug", "salary", "boss", "meeting", "company"],
+        "user_pet": ["pet", "dog", "cat", "puppy", "kitten", "animal", "walk", "vet", "bark", "meow"],
+        "user_goal": ["goal", "target", "dream", "achieve", "success", "future", "plan", "strive"],
+        "user_interest": ["like", "love", "hobby", "enjoy", "fun", "passion", "music", "cinema", "movie"],
+        "user_purchase": ["buy", "bought", "purchased", "got", "car", "phone", "crypto", "investment", "money", "spent"],
+    }
+
+    async def retrieve_relevant_memories(
+        self, prompt: str, history: Optional[List[Dict[str, Any]]] = None, limit: int = 10
+    ) -> Tuple[List[Dict[str, Any]], List[str]]:
+        """Retrieve active memories and rank them by relevance to current conversation context.
+
+        Returns:
+            Tuple[List[Dict[str, Any]], List[str]]: (ranked_memories, highly_relevant_keys)
+        """
+        active = await self.list_memories(active_only=True)
+        if not active:
+            return [], []
+
+        # Combine prompt and recent history
+        combined_text = prompt.lower()
+        if history:
+            for h in history[-3:]:
+                combined_text += " " + str(h.get("content", "")).lower()
+
+        scored: List[Tuple[float, Dict[str, Any], bool]] = []
+        highly_relevant_keys: List[str] = []
+
+        for m in active:
+            score = 1.0
+            is_relevant = False
+            k = m.get("key", "").lower()
+            content = m.get("content", "").lower()
+
+            # Check association triggers
+            for assoc_key, trigger_words in self.MEMORY_KEY_ASSOCIATIONS.items():
+                if assoc_key in k:
+                    if any(tw in combined_text for tw in trigger_words):
+                        score += 25.0
+                        is_relevant = True
+                        break
+
+            # Check direct token overlap between memory content and prompt
+            content_words = [w for w in re.findall(r"\w+", content) if len(w) > 3]
+            for cw in content_words:
+                if cw in combined_text:
+                    score += 8.0
+                    is_relevant = True
+
+            if is_relevant and m["key"] not in highly_relevant_keys:
+                highly_relevant_keys.append(m["key"])
+
+            item_copy = dict(m)
+            item_copy["isRelevant"] = is_relevant
+            scored.append((score, item_copy, is_relevant))
+
+        # Sort descending by relevance score
+        scored.sort(key=lambda x: x[0], reverse=True)
+        ranked = [item for _, item, _ in scored[:limit]]
+        return ranked, highly_relevant_keys
+
+    def format_memories_for_prompt(
+        self, memories: List[Dict[str, Any]], relevant_keys: Optional[List[str]] = None
+    ) -> str:
+        """Format active memories for injection into the Reaction Director prompt with explicit callback mandates."""
         if not memories:
             return "No prior user memories recorded."
 
+        rel_set = set(relevant_keys or [])
         lines = ["[RECALLED USER MEMORIES & PERSONAL CONTEXT]:"]
         for m in memories:
-            lines.append(f"- {m['key']}: {m['content']}")
-        lines.append(
-            "(Callback Guideline: Naturally weave these user details into your response with comedic or supportive callbacks when appropriate!)"
-        )
+            k = m["key"]
+            if k in rel_set or m.get("isRelevant"):
+                lines.append(f"- {k}: {m['content']} [HIGH CONTEXT RELEVANCE TO CONVERSATION]")
+            else:
+                lines.append(f"- {k}: {m['content']}")
+
+        if rel_set:
+            lines.append(
+                "(CALLBACK MANDATE: The user's message is directly connected to their personal memories above! Naturally weave a witty, supportive, or playful callback into your spoken dialogue about this!)"
+            )
+        else:
+            lines.append(
+                "(Callback Guideline: If appropriate, naturally weave these user details into your response with comedic or supportive callbacks!)"
+            )
         return "\n".join(lines)
 
 

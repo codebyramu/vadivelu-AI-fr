@@ -4,6 +4,7 @@ export interface SpeechSegment {
   type: 'speech';
   text: string;
   audioUrl?: string; // Preloaded or generated audio URL
+  durationMs?: number;
 }
 
 export interface MemeSegment {
@@ -72,6 +73,12 @@ export interface MemeMetadata {
   lastUsedAt?: string | null;
   useCount: number;
   isFavorite: boolean;
+  isAvailableNow?: boolean;
+  remainingCooldown?: number;
+  status?: string;
+  lineText?: string;
+  lineTranslation?: string;
+  intensity?: string;
 }
 
 export interface MemoryItem {

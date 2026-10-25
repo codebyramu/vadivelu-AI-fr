@@ -97,38 +97,21 @@ class ToolRegistry:
     async def _search_memes(
         self, query: Optional[str] = None, emotion: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        """Tool handler: search memes in database."""
-        all_memes = await meme_service.list_memes()
-        q = (query or "").lower().strip()
-        em = (emotion or "").lower().strip()
-
-        matched = []
-        for m in all_memes:
-            # Check availability
-            if not m.get("isAvailableNow", True):
-                continue
-
-            if em and em != "all" and m.get("emotion", "").lower() != em:
-                continue
-
-            if q:
-                tags = " ".join(m.get("tags", [])).lower()
-                title = m.get("title", "").lower()
-                hint = m.get("contextHint", "").lower()
-                if q not in tags and q not in title and q not in hint:
-                    continue
-
-            matched.append(
-                {
-                    "memeId": m["id"],
-                    "title": m["title"],
-                    "emotion": m["emotion"],
-                    "contextHint": m.get("contextHint", ""),
-                    "tags": m.get("tags", []),
-                }
-            )
-
-        return matched
+        """Tool handler: search memes in database using intelligent fuzzy/semantic relevance ranking."""
+        ranked = await meme_service.rank_dialogues(prompt=query, emotion=emotion, limit=15)
+        return [
+            {
+                "memeId": m["id"],
+                "title": m.get("lineText") or m.get("title", ""),
+                "emotion": m.get("emotion", ""),
+                "contextHint": m.get("lineTranslation") or m.get("contextHint", ""),
+                "tags": m.get("tags", []),
+                "relevanceScore": m.get("relevanceScore", 0.0),
+                "isAvailableNow": m.get("isAvailableNow", True),
+            }
+            for m in ranked
+            if m.get("isAvailableNow", True)
+        ]
 
     async def _list_available_memes(self) -> List[Dict[str, Any]]:
         """Tool handler: list all ready memes."""

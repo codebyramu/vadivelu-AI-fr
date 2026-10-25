@@ -22,8 +22,13 @@ import {
   Moon,
   Monitor,
   Settings,
+  PanelLeftClose,
+  PanelLeft,
 } from 'lucide-react';
 import { Conversation, Message, PersonalityPreset } from '../types';
+import { PlaybackProgressBar } from './PlaybackProgressBar';
+import { PlaybackStatus, ActiveMemeInfo } from '../hooks/useAudioPerformance';
+import { ToastType } from './ToastNotification';
 
 interface MainChatViewProps {
   conversations: Conversation[];
@@ -48,6 +53,12 @@ interface MainChatViewProps {
   isListening: boolean;
   themeChoice?: 'light' | 'dark' | 'system';
   onToggleTheme?: () => void;
+  isSendingMessage?: boolean;
+  playbackStatus?: PlaybackStatus;
+  activeMeme?: ActiveMemeInfo | null;
+  onInterruptAudio?: () => void;
+  onShowToast?: (message: string, type?: ToastType) => void;
+  isDarkTheme?: boolean;
 }
 
 export const MainChatView: React.FC<MainChatViewProps> = ({
@@ -72,6 +83,12 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   isListening,
   themeChoice = 'system',
   onToggleTheme,
+  isSendingMessage = false,
+  playbackStatus = 'idle',
+  activeMeme = null,
+  onInterruptAudio,
+  onShowToast,
+  isDarkTheme = false,
 }) => {
   const [inputText, setInputText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -80,6 +97,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   const [editTitle, setEditTitle] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -88,11 +106,11 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isSendingMessage]);
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || isSendingMessage) return;
     onSendMessage(inputText.trim());
     setInputText('');
   };
@@ -100,6 +118,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
+    onShowToast?.('Copied to clipboard', 'success');
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -108,6 +127,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
       ...prev,
       [id]: prev[id] === type ? undefined! : type,
     }));
+    onShowToast?.(type === 'up' ? 'Feedback recorded: Helpful' : 'Feedback recorded: Not helpful', 'info');
   };
 
   const handleStartRename = (conv: Conversation, e: React.MouseEvent) => {
@@ -120,6 +140,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
     e?.preventDefault();
     if (editTitle.trim()) {
       onRenameConversation(id, editTitle.trim());
+      onShowToast?.('Conversation renamed', 'success');
     }
     setEditingConvId(null);
   };
@@ -134,7 +155,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
         return (
           <span
             key={index}
-            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 my-0.5 mx-1 rounded-full text-xs font-semibold bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white border border-neutral-300 dark:border-neutral-700 align-middle shadow-xs"
+            className="inline-flex items-center gap-1.5 px-2.5 py-0.5 my-0.5 mx-1 rounded-full text-xs font-semibold bg-neutral-100 dark:bg-neutral-900 text-black dark:text-white border border-neutral-300 dark:border-neutral-700 align-middle shadow-xs hover:scale-105 transition-transform"
           >
             <span className="text-[11px]">🎭</span>
             <span>[meme: {memeTitle}]</span>
@@ -142,7 +163,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
         );
       }
 
-      // Format bullet points and line breaks
+      // Format text content
       return (
         <span key={index} className="whitespace-pre-wrap">
           {part}
@@ -153,24 +174,44 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
   return (
     <div className="flex flex-col h-screen max-h-screen bg-white dark:bg-black text-black dark:text-white select-none overflow-hidden font-sans transition-colors duration-150">
-      {/* Desktop App Window Title Bar (Clean, minimal, no colored dots) */}
+      {/* Desktop App Window Title Bar */}
       <div className="h-10 bg-white dark:bg-black border-b border-neutral-200 dark:border-neutral-800 px-4 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
+          {/* Sidebar Toggle Button */}
+          <button
+            onClick={() => setIsSidebarOpen(prev => !prev)}
+            data-cursor-text={isSidebarOpen ? 'Hide' : 'Show'}
+            className="p-1 rounded-md text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition active:scale-95"
+            title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+          >
+            {isSidebarOpen ? (
+              <PanelLeftClose className="w-3.5 h-3.5 transition-transform" />
+            ) : (
+              <PanelLeft className="w-3.5 h-3.5 transition-transform" />
+            )}
+          </button>
+
           <div className="w-5 h-5 rounded-md bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
             <Sparkles className="w-3 h-3" />
           </div>
           <span className="text-xs font-semibold text-black dark:text-white tracking-tight">
-            AI Voice Chat
+            Vadivelu AI
           </span>
         </div>
+
         <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400 truncate max-w-sm">
-          {activeConversation?.title || 'Vadivelu AI'}
+          {activeConversation?.title || 'Vadivelu AI Voice Companion'}
         </div>
+
         <div className="flex items-center gap-1.5">
           {onToggleTheme && (
             <button
-              onClick={onToggleTheme}
-              className="p-1 rounded-md text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition"
+              onClick={() => {
+                onToggleTheme();
+                onShowToast?.(`Theme changed to ${themeChoice === 'dark' ? 'light' : 'dark'}`, 'sparkle');
+              }}
+              data-cursor-text="Theme"
+              className="p-1 rounded-md text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition active:scale-90"
               title={`Theme: ${themeChoice} (Click to toggle)`}
             >
               {themeChoice === 'dark' ? (
@@ -184,14 +225,16 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
           )}
           <button
             onClick={onOpenSettings}
-            className="p-1 rounded-md text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition"
+            data-cursor-text="Settings"
+            className="p-1 rounded-md text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition active:scale-90"
             title="Settings"
           >
             <Settings className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={onOpenCommandPalette}
-            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white border border-neutral-200 dark:border-neutral-800"
+            data-cursor-text="Search"
+            className="px-1.5 py-0.5 rounded text-[10px] font-mono text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white border border-neutral-200 dark:border-neutral-800 transition active:scale-95"
             title="Command Palette (Ctrl+K)"
           >
             ⌘K
@@ -202,11 +245,19 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
       {/* Main App Container */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar */}
-        <div className="w-72 bg-[#fafafa] dark:bg-black border-r border-neutral-200 dark:border-neutral-800 flex flex-col justify-between shrink-0">
-          <div className="p-4 flex flex-col min-h-0 flex-1">
+        <div
+          className={`bg-[#fafafa] dark:bg-black border-r border-neutral-200 dark:border-neutral-800 flex flex-col justify-between shrink-0 transition-all duration-300 ease-in-out ${
+            isSidebarOpen ? 'w-72 opacity-100' : 'w-0 opacity-0 border-r-0 pointer-events-none'
+          }`}
+        >
+          <div className="p-4 flex flex-col min-h-0 flex-1 w-72">
             {/* + New Chat Pill Button */}
             <button
-              onClick={onNewChat}
+              onClick={() => {
+                onNewChat();
+                onShowToast?.('New chat started', 'sparkle');
+              }}
+              data-cursor-text="New"
               className="w-full flex items-center gap-2 px-4 py-2.5 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black active:scale-[0.98] rounded-full text-sm font-semibold shadow-sm transition"
             >
               <div className="w-4 h-4 rounded-full border border-current flex items-center justify-center font-bold text-xs leading-none">
@@ -267,7 +318,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                         <div className="hidden group-hover:flex items-center gap-1 shrink-0 ml-1">
                           <button
                             onClick={e => handleStartRename(conv, e)}
-                            className="p-1 rounded text-neutral-400 hover:text-black dark:hover:text-white"
+                            className="p-1 rounded text-neutral-400 hover:text-black dark:hover:text-white transition active:scale-90"
                             title="Rename"
                           >
                             <Edit2 className="w-3 h-3" />
@@ -277,8 +328,9 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                               onClick={e => {
                                 e.stopPropagation();
                                 onDeleteConversation(conv.id);
+                                onShowToast?.('Conversation deleted', 'info');
                               }}
-                              className="p-1 rounded text-neutral-400 hover:text-black dark:hover:text-white"
+                              className="p-1 rounded text-neutral-400 hover:text-black dark:hover:text-white transition active:scale-90"
                               title="Delete chat"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -293,26 +345,31 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
             </div>
           </div>
 
-          {/* User Profile Footer (matching screenshot 0: JD jdoe@example.com ...) */}
-          <div className="p-3 border-t border-neutral-200 dark:border-neutral-800 relative bg-[#fafafa] dark:bg-black">
+          {/* User Profile Footer */}
+          <div className="p-3 border-t border-neutral-200 dark:border-neutral-800 relative bg-[#fafafa] dark:bg-black w-72">
             <div
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center justify-between p-2 rounded-2xl hover:bg-neutral-100 dark:hover:bg-neutral-900 cursor-pointer transition"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-neutral-200 dark:bg-neutral-800 text-black dark:text-white flex items-center justify-center text-xs font-semibold shrink-0 border border-neutral-300 dark:border-neutral-700">
-                  JD
+                  VD
                 </div>
-                <span className="text-sm font-medium text-black dark:text-white truncate">
-                  jdoe@example.com
-                </span>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-semibold text-black dark:text-white truncate">
+                    Vadivelu AI
+                  </span>
+                  <span className="text-[11px] text-neutral-500 dark:text-neutral-400 truncate">
+                    Supabase + Gemini 3.5
+                  </span>
+                </div>
               </div>
               <MoreHorizontal className="w-4 h-4 text-neutral-400 shrink-0" />
             </div>
 
             {/* User Dropdown Menu */}
             {showUserMenu && (
-              <div className="absolute bottom-16 left-3 right-3 bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-xl py-2 z-30 text-xs">
+              <div className="absolute bottom-16 left-3 right-3 bg-white dark:bg-black border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-xl py-2 z-30 text-xs animate-in fade-in zoom-in-95 duration-150">
                 <button
                   onClick={() => { setShowUserMenu(false); onOpenSettings(); }}
                   className="w-full text-left px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900 text-black dark:text-white"
@@ -329,7 +386,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                   onClick={() => { setShowUserMenu(false); onOpenMemes(); }}
                   className="w-full text-left px-4 py-2 hover:bg-neutral-100 dark:hover:bg-neutral-900 text-black dark:text-white"
                 >
-                  Meme Library Catalog
+                  Supabase Dialogue Catalog
                 </button>
               </div>
             )}
@@ -337,20 +394,20 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
         </div>
 
         {/* Main Chat Area */}
-        <div className="flex-1 flex flex-col bg-white dark:bg-black min-w-0 transition-colors duration-150">
+        <div className="flex-1 flex flex-col bg-white dark:bg-black min-w-0 transition-colors duration-150 relative">
           {/* Main Chat Header */}
           <div className="h-14 px-8 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between shrink-0 bg-white dark:bg-black">
             {/* Title */}
             <div className="flex items-center gap-3 min-w-0">
               <h1 className="text-lg font-semibold text-black dark:text-white truncate">
-                {activeConversation?.title || 'Vadivelu AI'}
+                {activeConversation?.title || 'Vadivelu AI Voice Companion'}
               </h1>
             </div>
 
             {/* Right Header Controls */}
             <div className="flex items-center gap-4 shrink-0">
               {/* Voice Ready Badge */}
-              <div className="flex items-center gap-1.5 text-xs font-medium text-black dark:text-white bg-neutral-100 dark:bg-neutral-900 px-2.5 py-1 rounded-full border border-neutral-200 dark:border-neutral-800">
+              <div className="flex items-center gap-1.5 text-xs font-medium text-black dark:text-white bg-neutral-100 dark:bg-neutral-900 px-2.5 py-1 rounded-full border border-neutral-200 dark:border-neutral-800 shadow-2xs">
                 <span className="w-2 h-2 rounded-full bg-black dark:bg-white animate-pulse" />
                 <span>Voice ready</span>
               </div>
@@ -358,7 +415,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
               {/* Info Icon */}
               <button
                 onClick={() => setShowInfoModal(!showInfoModal)}
-                className="p-2 rounded-xl text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition"
+                className="p-2 rounded-xl text-neutral-500 hover:text-black dark:text-neutral-400 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-900 transition active:scale-95"
                 title="Conversation info"
               >
                 <Info className="w-5 h-5" />
@@ -366,8 +423,12 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
               {/* Voice Mode Mic Trigger */}
               <button
-                onClick={onOpenVoiceMode}
-                className="p-2 rounded-xl text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white transition"
+                onClick={() => {
+                  onOpenVoiceMode();
+                  onShowToast?.('Entering Live Voice Mode', 'audio');
+                }}
+                data-cursor-text="Voice"
+                className="p-2 rounded-xl text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-900 hover:text-black dark:hover:text-white transition active:scale-95"
                 title="Open Live Voice Mode"
               >
                 <Mic className="w-5 h-5" />
@@ -377,10 +438,10 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
           {/* Info Modal Dropdown */}
           {showInfoModal && (
-            <div className="mx-8 mt-2 p-4 bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-2xl text-xs space-y-1.5 animate-in fade-in">
+            <div className="mx-8 mt-2 p-4 bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-2xl text-xs space-y-1.5 animate-in fade-in slide-in-from-top-1">
               <div className="font-semibold text-black dark:text-white">Session Information</div>
               <p className="text-neutral-500 dark:text-neutral-400">
-                Persona: <span className="font-medium capitalize">{activeConversation?.personality || 'funny_friend'}</span> • Messages: {messages.length} • Powered by Gemini Flash + Vadivelu Reaction Director
+                Persona: <span className="font-medium capitalize">{activeConversation?.personality || 'funny_friend'}</span> • Messages: {messages.length} • Powered by Gemini 3.5 Flash + Supabase Dialogues
               </p>
             </div>
           )}
@@ -388,19 +449,23 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
           {/* Messages Scroll Area */}
           <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 bg-white dark:bg-black">
             {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto py-20 space-y-4">
+              <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto py-20 space-y-4 animate-in fade-in zoom-in-95 duration-200">
                 <div className="w-14 h-14 rounded-2xl bg-black dark:bg-white text-white dark:text-black flex items-center justify-center shadow-xs">
                   <Sparkles className="w-7 h-7" />
                 </div>
-                <h2 className="text-xl font-bold text-black dark:text-white">
+                <h2 className="text-xl font-bold text-black dark:text-white tracking-tight">
                   Vadivelu AI Voice Companion
                 </h2>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
-                  Ask any question, explore ideas, or speak naturally. Iconic Vadivelu comedic punchlines will play at the perfect comedic moments!
+                  Ask any question, explore ideas, or speak naturally. Authentic Vadivelu comedic punchlines from your Supabase catalog will play seamlessly in real-time!
                 </p>
                 <button
-                  onClick={onOpenVoiceMode}
-                  className="px-5 py-2.5 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black rounded-full text-xs font-semibold shadow-sm flex items-center gap-2"
+                  onClick={() => {
+                    onOpenVoiceMode();
+                    onShowToast?.('Voice Mode initiated', 'audio');
+                  }}
+                  data-cursor-text="Voice"
+                  className="px-5 py-2.5 bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black rounded-full text-xs font-semibold shadow-sm flex items-center gap-2 active:scale-95 transition"
                 >
                   <Mic className="w-4 h-4" />
                   <span>Launch Voice Mode</span>
@@ -413,7 +478,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
                 if (isUser) {
                   return (
-                    <div key={msg.id} className="flex justify-end">
+                    <div key={msg.id} className="flex justify-end animate-message-entry">
                       <div className="max-w-[75%] bg-black text-white dark:bg-white dark:text-black rounded-3xl rounded-br-lg px-5 py-3 text-[14.5px] leading-relaxed shadow-xs font-normal">
                         {renderMessageContent(msg.content)}
                       </div>
@@ -423,7 +488,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
 
                 // Assistant Message Bubble
                 return (
-                  <div key={msg.id} className="flex items-start gap-3.5 max-w-[85%] group">
+                  <div key={msg.id} className="flex items-start gap-3.5 max-w-[85%] group animate-message-entry">
                     {/* Assistant Sparkle Icon Avatar */}
                     <div className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 text-black dark:text-white flex items-center justify-center shrink-0 shadow-xs mt-1">
                       <Sparkles className="w-3.5 h-3.5" />
@@ -435,12 +500,12 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                         {renderMessageContent(msg.content)}
                       </div>
 
-                      {/* Action Bar (Thumbs Up, Down, Copy, Read aloud) */}
+                      {/* Action Bar */}
                       <div className="flex items-center gap-3 px-2 text-neutral-400 dark:text-neutral-500 text-xs">
                         {/* Thumbs up */}
                         <button
                           onClick={() => handleFeedback(msg.id, 'up')}
-                          className={`p-1 rounded-md transition ${
+                          className={`p-1 rounded-md transition active:scale-90 ${
                             feedbackState[msg.id] === 'up'
                               ? 'text-black dark:text-white bg-neutral-200 dark:bg-neutral-800'
                               : 'hover:text-black dark:hover:text-white'
@@ -453,7 +518,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                         {/* Thumbs down */}
                         <button
                           onClick={() => handleFeedback(msg.id, 'down')}
-                          className={`p-1 rounded-md transition ${
+                          className={`p-1 rounded-md transition active:scale-90 ${
                             feedbackState[msg.id] === 'down'
                               ? 'text-black dark:text-white bg-neutral-200 dark:bg-neutral-800'
                               : 'hover:text-black dark:hover:text-white'
@@ -466,7 +531,8 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                         {/* Copy */}
                         <button
                           onClick={() => handleCopy(msg.content, msg.id)}
-                          className="p-1 rounded-md hover:text-black dark:hover:text-white transition"
+                          data-cursor-text="Copy"
+                          className="p-1 rounded-md hover:text-black dark:hover:text-white transition active:scale-90"
                           title="Copy to clipboard"
                         >
                           {copiedId === msg.id ? (
@@ -479,7 +545,8 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                         {/* Read Aloud Button */}
                         <button
                           onClick={() => onPlayMessageAudio(msg)}
-                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition ${
+                          data-cursor-text={isPlayingThis ? 'Stop' : 'Listen'}
+                          className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition active:scale-95 ${
                             isPlayingThis
                               ? 'bg-black text-white dark:bg-white dark:text-black shadow-xs'
                               : 'hover:bg-neutral-200/60 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-300'
@@ -504,60 +571,106 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
                 );
               })
             )}
+
+            {/* Thinking / Shimmer Skeleton Loader */}
+            {isSendingMessage && (
+              <div className="flex items-start gap-3.5 max-w-[85%] animate-message-entry">
+                <div className="w-8 h-8 rounded-full bg-neutral-100 dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-800 text-black dark:text-white flex items-center justify-center shrink-0 shadow-xs mt-1 animate-pulse">
+                  <Sparkles className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '3s' }} />
+                </div>
+                <div className="flex flex-col gap-2 min-w-[280px]">
+                  <div className="bg-neutral-100 dark:bg-neutral-950 border border-neutral-200/80 dark:border-neutral-800 rounded-3xl rounded-tl-lg px-6 py-4 shadow-xs">
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="w-2 h-2 rounded-full bg-black dark:bg-white animate-ping" />
+                      <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-300 tracking-tight">
+                        Vadivelu is preparing response…
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-3 w-4/5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden relative">
+                        <div className="absolute inset-0 animate-shimmer" />
+                      </div>
+                      <div className="h-3 w-3/5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden relative">
+                        <div className="absolute inset-0 animate-shimmer" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Bottom Input Area Pill (matching screenshot 0) */}
+          {/* Bottom Floating Playback Indicator & Input Area */}
           <div className="px-8 pb-3 pt-1 shrink-0 bg-white dark:bg-black">
+            {/* Playback progress bar right above input pill */}
+            {(isAudioPlaying || playbackStatus === 'preparing' || playbackStatus === 'playing_speech' || playbackStatus === 'playing_meme') && onInterruptAudio && (
+              <div className="max-w-4xl mx-auto mb-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                <PlaybackProgressBar
+                  performance={messages.find(m => m.id === playingMessageId)?.performance}
+                  playbackStatus={playbackStatus || (isAudioPlaying ? 'playing_speech' : 'idle')}
+                  activeMeme={activeMeme || null}
+                  onInterrupt={onInterruptAudio}
+                  isDarkTheme={isDarkTheme}
+                />
+              </div>
+            )}
+
+            {/* Input Form Pill */}
             <form
               onSubmit={handleSubmit}
-              className="relative max-w-4xl mx-auto bg-neutral-50 dark:bg-black border border-neutral-300 dark:border-neutral-800 rounded-full px-4 py-2.5 flex items-center gap-3 shadow-xs focus-within:border-black dark:focus-within:border-white transition"
+              className="relative max-w-4xl mx-auto bg-neutral-50 dark:bg-black border border-neutral-300 dark:border-neutral-800 rounded-full px-4 py-2.5 flex items-center gap-3 shadow-xs focus-within:border-black dark:focus-within:border-white transition-all"
             >
               <input
                 ref={inputRef}
                 type="text"
                 value={inputText}
                 onChange={e => setInputText(e.target.value)}
-                placeholder="Ask anything or click mic to speak..."
-                className="flex-1 bg-transparent border-none outline-none text-sm text-black dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 px-2"
+                placeholder={isSendingMessage ? 'Waiting for Vadivelu...' : 'Ask anything or click mic to speak...'}
+                disabled={isSendingMessage}
+                className="flex-1 bg-transparent border-none outline-none text-sm text-black dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 px-2 disabled:opacity-50"
               />
 
               {/* Attachment Paperclip */}
               <button
                 type="button"
                 onClick={onOpenMemes}
-                className="p-2 text-neutral-400 hover:text-black dark:hover:text-white transition"
+                data-cursor-text="Memes"
+                className="p-2 text-neutral-400 hover:text-black dark:hover:text-white transition-all duration-200 hover:rotate-12 active:scale-90"
                 title="Attach meme sound"
               >
                 <Paperclip className="w-4 h-4" />
               </button>
 
-              {/* Mic Button (solid monochrome) */}
+              {/* Mic Button */}
               <button
                 type="button"
                 onClick={onOpenVoiceMode}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition shadow-sm ${
+                data-cursor-text="Speak"
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm ${
                   isListening
                     ? 'bg-neutral-800 text-white dark:bg-neutral-200 dark:text-black animate-pulse ring-4 ring-neutral-400'
                     : 'bg-black hover:bg-neutral-800 text-white dark:bg-white dark:hover:bg-neutral-200 dark:text-black active:scale-95'
                 }`}
                 title="Start Live Voice Chat"
               >
-                <Mic className="w-4 h-4" />
+                <Mic className="w-4 h-4 transition-transform duration-200 hover:scale-110" />
               </button>
 
               {/* Send Button */}
               <button
                 type="submit"
-                disabled={!inputText.trim()}
-                className={`p-2 rounded-full transition ${
-                  inputText.trim()
-                    ? 'bg-black text-white dark:bg-white dark:text-black hover:opacity-90'
+                disabled={!inputText.trim() || isSendingMessage}
+                data-cursor-text="Send"
+                className={`group relative p-2 rounded-full transition-all duration-200 active:scale-90 ${
+                  inputText.trim() && !isSendingMessage
+                    ? 'bg-black text-white dark:bg-white dark:text-black hover:opacity-90 shadow-sm'
                     : 'text-neutral-300 dark:text-neutral-700 cursor-not-allowed'
                 }`}
                 title="Send message"
               >
-                <ArrowUp className="w-4 h-4 stroke-[2.5]" />
+                <ArrowUp className="w-4 h-4 stroke-[2.5] transition-transform duration-200 group-hover:-translate-y-0.5" />
               </button>
             </form>
 
