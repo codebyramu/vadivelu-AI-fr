@@ -5,7 +5,6 @@ import { useAudioPerformance } from './hooks/useAudioPerformance';
 import { useSpeechRecognition } from './hooks/useSpeechRecognition';
 import { MainChatView } from './components/MainChatView';
 import { VoiceModeView } from './components/VoiceModeView';
-import { MiniVoiceWidget } from './components/MiniVoiceWidget';
 import { CommandPalette } from './components/CommandPalette';
 import { MemeLibraryModal } from './components/MemeLibraryModal';
 import { MemoryModal } from './components/MemoryModal';
@@ -461,31 +460,15 @@ export const App: React.FC = () => {
           }}
           onShowToast={showToast}
           isDarkTheme={isDark}
-        />
-      )}
-
-      {/* Default In-Chat Voice Widget (Strictly matching Images 1 & 2) */}
-      {!isVoiceMode && (
-        <MiniVoiceWidget
-          isOpen={isMiniVoiceOpen}
-          onClose={handleCloseLiveVoice}
-          onExpandFullscreen={handleExpandFullscreenVoice}
-          isListening={speechRecognition.isListening}
-          onToggleListening={() => {
+          isVoiceWidgetOpen={isMiniVoiceOpen}
+          onCloseVoiceWidget={handleCloseLiveVoice}
+          onExpandVoiceFullscreen={handleExpandFullscreenVoice}
+          onToggleVoiceListening={() => {
             if (speechRecognition.isListening) speechRecognition.stopListening();
             else speechRecognition.startListening();
           }}
-          onInterrupt={() => {
-            audioPerformance.interrupt();
-            setPlayingMessageId(null);
-          }}
-          playbackStatus={audioPerformance.status}
-          activeMeme={audioPerformance.activeMeme}
-          analyserNode={audioPerformance.analyserNode || speechRecognition.micAnalyser}
-          transcript={speechRecognition.transcript}
-          interimTranscript={speechRecognition.interimTranscript}
-          isDarkTheme={isDark}
-          voiceGender={settings.voiceGender}
+          voiceTranscript={speechRecognition.transcript}
+          voiceInterimTranscript={speechRecognition.interimTranscript}
         />
       )}
 

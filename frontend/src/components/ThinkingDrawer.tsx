@@ -27,10 +27,10 @@ export const ThinkingDrawer: React.FC<ThinkingDrawerProps> = ({
 
   return (
     <aside
-      className={`fixed top-10 bottom-0 right-0 z-40 w-84 sm:w-96 md:w-[410px] border-l flex flex-col shadow-2xl transition-all duration-300 ease-in-out select-none animate-in slide-in-from-right duration-200 ${
+      className={`shrink-0 w-80 sm:w-96 md:w-[410px] h-full border-l flex flex-col shadow-lg transition-all duration-200 ease-in-out select-none animate-in slide-in-from-right duration-200 z-20 ${
         isDarkTheme
-          ? 'bg-black/95 text-white border-neutral-800 backdrop-blur-2xl'
-          : 'bg-white/95 text-black border-neutral-200 backdrop-blur-2xl'
+          ? 'bg-black text-white border-neutral-800'
+          : 'bg-white text-black border-neutral-200'
       }`}
     >
       {/* Header — ChatGPT / Meta AI Style */}

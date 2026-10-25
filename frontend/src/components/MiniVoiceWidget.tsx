@@ -61,7 +61,7 @@ export const MiniVoiceWidget: React.FC<MiniVoiceWidgetProps> = ({
   }
 
   return (
-    <div className="fixed bottom-24 right-8 z-40 flex flex-col items-center select-none animate-in fade-in zoom-in-95 duration-200">
+    <div className="absolute bottom-24 right-8 z-30 flex flex-col items-center select-none animate-in fade-in zoom-in-95 duration-200">
       {/* Status Label (Image 1 & 2: "Speaking..." or "Listening...") */}
       <div className="mb-1 flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-black/85 dark:bg-black/95 backdrop-blur-md border border-neutral-800 text-[11px] font-medium text-white shadow-md">
         {activeMeme ? (

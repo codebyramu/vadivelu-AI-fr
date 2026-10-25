@@ -32,6 +32,7 @@ import { Conversation, Message, PersonalityPreset, ThoughtProcess } from '../typ
 import { PlaybackStatus, ActiveMemeInfo } from '../hooks/useAudioPerformance';
 import { ToastType } from './ToastNotification';
 import { ThinkingDrawer } from './ThinkingDrawer';
+import { MiniVoiceWidget } from './MiniVoiceWidget';
 
 interface MainChatViewProps {
   conversations: Conversation[];
@@ -62,6 +63,12 @@ interface MainChatViewProps {
   onInterruptAudio?: () => void;
   onShowToast?: (message: string, type?: ToastType) => void;
   isDarkTheme?: boolean;
+  isVoiceWidgetOpen?: boolean;
+  onCloseVoiceWidget?: () => void;
+  onExpandVoiceFullscreen?: () => void;
+  onToggleVoiceListening?: () => void;
+  voiceTranscript?: string;
+  voiceInterimTranscript?: string;
 }
 
 export const MainChatView: React.FC<MainChatViewProps> = ({
@@ -92,6 +99,12 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   onInterruptAudio,
   onShowToast,
   isDarkTheme = false,
+  isVoiceWidgetOpen = false,
+  onCloseVoiceWidget,
+  onExpandVoiceFullscreen,
+  onToggleVoiceListening,
+  voiceTranscript = '',
+  voiceInterimTranscript = '',
 }) => {
   const [inputText, setInputText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -412,16 +425,6 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
             )}
           </div>
         </div>
-
-        {/* Thinking Process Right-Side Slide Drawer (ChatGPT / Meta AI style) */}
-        <ThinkingDrawer
-          isOpen={isThinkingOpen}
-          onClose={() => setIsThinkingOpen(false)}
-          thoughtProcess={activeThoughtProcess || (messages.length > 0 ? messages[messages.length - 1]?.performance?.thoughtProcess : null)}
-          isSendingMessage={isSendingMessage}
-          activePrompt={inputText}
-          isDarkTheme={isDarkTheme}
-        />
 
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col bg-white dark:bg-black min-w-0 transition-colors duration-150 relative">
@@ -766,7 +769,36 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
               AI Voice Chat can make mistakes. Consider checking important info.
             </div>
           </div>
+
+          {/* Default In-Chat Voice Orb Widget (Images 1 & 2) — Perfectly aligned within chat area */}
+          {isVoiceWidgetOpen && (
+            <MiniVoiceWidget
+              isOpen={isVoiceWidgetOpen}
+              onClose={onCloseVoiceWidget || (() => {})}
+              onExpandFullscreen={onExpandVoiceFullscreen}
+              isListening={isListening}
+              onToggleListening={onToggleVoiceListening || onStartPushToTalk}
+              onInterrupt={onInterruptAudio || (() => {})}
+              playbackStatus={playbackStatus}
+              activeMeme={activeMeme}
+              transcript={voiceTranscript}
+              interimTranscript={voiceInterimTranscript}
+              isDarkTheme={isDarkTheme}
+            />
+          )}
         </div>
+
+        {/* Right Docked Thinking Process Drawer (ChatGPT / Meta AI style) */}
+        {isThinkingOpen && (
+          <ThinkingDrawer
+            isOpen={isThinkingOpen}
+            onClose={() => setIsThinkingOpen(false)}
+            thoughtProcess={activeThoughtProcess || (messages.length > 0 ? messages[messages.length - 1]?.performance?.thoughtProcess : null)}
+            isSendingMessage={isSendingMessage}
+            activePrompt={inputText}
+            isDarkTheme={isDarkTheme}
+          />
+        )}
       </div>
     </div>
   );
