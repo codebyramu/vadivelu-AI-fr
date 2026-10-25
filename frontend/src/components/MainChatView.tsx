@@ -70,6 +70,7 @@ interface MainChatViewProps {
   voiceTranscript?: string;
   voiceInterimTranscript?: string;
   isTranscribing?: boolean;
+  isSpeakingDetected?: boolean;
 }
 
 export const MainChatView: React.FC<MainChatViewProps> = ({
@@ -107,6 +108,7 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
   voiceTranscript = '',
   voiceInterimTranscript = '',
   isTranscribing = false,
+  isSpeakingDetected = false,
 }) => {
   const [inputText, setInputText] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -720,9 +722,17 @@ export const MainChatView: React.FC<MainChatViewProps> = ({
               <input
                 ref={inputRef}
                 type="text"
-                value={inputText}
+                value={inputText || (isListening ? (voiceInterimTranscript || voiceTranscript) : '')}
                 onChange={e => setInputText(e.target.value)}
-                placeholder={isSendingMessage ? 'Waiting for Vadivelu...' : 'Ask anything or click mic to speak...'}
+                placeholder={
+                  isSendingMessage
+                    ? 'Waiting for Vadivelu...'
+                    : isTranscribing
+                    ? 'Transcribing your voice (Tanglish / Hinglish / English)...'
+                    : isListening
+                    ? (isSpeakingDetected ? 'Hearing your voice…' : 'Listening... Speak in Tanglish or English')
+                    : 'Ask anything or click mic to speak...'
+                }
                 disabled={isSendingMessage}
                 className="flex-1 bg-transparent border-none outline-none text-sm text-black dark:text-white placeholder-neutral-400 dark:placeholder-neutral-500 px-2 disabled:opacity-50"
               />

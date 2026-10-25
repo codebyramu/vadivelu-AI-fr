@@ -473,6 +473,7 @@ export const App: React.FC = () => {
           voiceTranscript={speechRecognition.transcript}
           voiceInterimTranscript={speechRecognition.interimTranscript}
           isTranscribing={speechRecognition.isTranscribing}
+          isSpeakingDetected={speechRecognition.isSpeakingDetected}
         />
       )}
 

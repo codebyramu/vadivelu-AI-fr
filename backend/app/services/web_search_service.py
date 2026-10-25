@@ -303,11 +303,20 @@ class WebSearchService:
         b64_data = base64.b64encode(wav_bytes).decode("utf-8")
 
         prompt = (
-            "You are an ultra-accurate speech-to-text transcription engine. "
-            "Please transcribe verbatim what is spoken in this audio. "
-            "The speaker may speak in English, Tamil, or Tanglish (Tamil written in Latin script). "
-            "If Tamil words are spoken in English script (Tanglish), preserve the Tanglish phonetically. "
-            "Output ONLY the transcribed words. Do not include quotes, markdown, explanations, or labels."
+            "You are an expert speech-to-text transcription engine specialized in multilingual and Indian code-mixed speech.\n\n"
+            "CRITICAL INSTRUCTIONS FOR TANGLISH, HINGLISH, AND ENGLISH:\n"
+            "1. TANGLISH (Tamil in English alphabet):\n"
+            "   If the speaker speaks Tamil or code-mixed Tamil (e.g. 'Enna panra', 'let us go', 'semma comedy bro', 'romba nalla irukku', 'enna visayam'), "
+            "   ALWAYS transcribe it phonetically in English/Latin letters (Tanglish), e.g. 'Enna panra, let\\'s go'. "
+            "   DO NOT convert into Tamil script.\n\n"
+            "2. HINGLISH (Hindi in English alphabet):\n"
+            "   If the speaker speaks Hindi or code-mixed Hindi (e.g. 'Kya kar raha hai', 'kya chal raha hai', 'bhai let\\'s go'), "
+            "   ALWAYS transcribe it in English/Latin letters (Hinglish). "
+            "   DO NOT convert into Devanagari script.\n\n"
+            "3. ENGLISH:\n"
+            "   If the speaker speaks English, transcribe in standard English.\n\n"
+            "4. OUTPUT FORMAT:\n"
+            "   Output ONLY the transcribed words verbatim without any quotes, timestamps, labels, or extra comments."
         )
 
         contents = [

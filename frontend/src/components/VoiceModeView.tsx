@@ -347,9 +347,17 @@ export const VoiceModeView: React.FC<VoiceModeViewProps> = ({
           <div className="relative bg-neutral-900/90 border border-neutral-800 rounded-full px-4 py-2 flex items-center gap-2.5 shadow-lg focus-within:border-white transition-all">
             <input
               type="text"
-              value={inputText}
+              value={inputText || interimTranscript || transcript}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="Chat or paste a link here..."
+              placeholder={
+                isSendingMessage
+                  ? 'Thinking…'
+                  : isTranscribing
+                  ? 'Transcribing your voice (Tanglish / Hinglish / English)...'
+                  : isListening
+                  ? 'Listening... Speak in Tanglish, Hinglish, or English'
+                  : 'Chat or paste a link here...'
+              }
               disabled={isSendingMessage}
               className="flex-1 bg-transparent border-none outline-none text-xs text-white placeholder-neutral-500 px-1 disabled:opacity-50"
             />
